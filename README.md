@@ -2,19 +2,28 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+This project now includes a MERN backend alongside the Next.js frontend.
+
+First, install dependencies:
+
+```bash
+npm install
+```
+
+Copy the example environment file and configure MongoDB:
+
+```bash
+cp .env.example .env
+```
+
+Start both frontend and backend in development:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Next.js frontend: http://localhost:3000
+- Express backend API: http://localhost:5000
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
