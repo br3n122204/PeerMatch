@@ -1,0 +1,115 @@
+"use client";
+
+import Image from "next/image";
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email || !password) {
+      setStatusMessage("Please enter both email and password.");
+      return;
+    }
+
+    setStatusMessage("Signing in...");
+
+    // TODO: replace this with your real authentication logic
+    setTimeout(() => {
+      setStatusMessage(`Signed in as ${email}.`);
+    }, 500);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
+        <div className="flex h-24 w-full max-w-xl items-center justify-center rounded-full bg-white/80 px-6 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
+          <div className="flex items-center gap-4">
+            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#0069A8]">PeerMatch</p>
+              <p className="text-xs text-zinc-500">Student Collaboration</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full max-w-sm rounded-[2rem] bg-white px-8 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.12)]">
+          <h1 className="text-3xl font-semibold text-[#0F172A]">Log in to PeerMatch</h1>
+          <p className="mt-3 text-sm text-zinc-600">Use your institutional email to access your account.</p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div>
+              <label htmlFor="email" className="mb-2 block text-sm font-medium text-zinc-700">
+                Institutional Email
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 5H20C20.5523 5 21 5.44772 21 6V18C21 18.5523 20.5523 19 20 19H4C3.44772 19 3 18.5523 3 18V6C3 5.44772 3.44772 5 4 5Z" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 7.5L12 13L21 7.5" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Institutional Email"
+                  required
+                  className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="mb-2 block text-sm font-medium text-zinc-700">
+                Password
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17 11V8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8V11" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M5 11H19C20.1046 11 21 11.8954 21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V13C3 11.8954 3.89543 11 5 11Z" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  required
+                  className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                />
+              </div>
+            </div>
+
+            {statusMessage ? (
+              <p className="text-sm text-red-600">{statusMessage}</p>
+            ) : null}
+
+            <button
+              type="submit"
+              className="w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white transition hover:bg-[#df531f]"
+            >
+              Continue
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-zinc-600">
+            Don&apos;t have PeerMatch account?{' '}
+            <Link href="/register" className="font-semibold text-[#0069A8] hover:text-[#004f7d]">
+              Sign up
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
