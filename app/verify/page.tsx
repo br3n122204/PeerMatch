@@ -132,7 +132,7 @@ export default function VerifyPage() {
       });
 
       setStatus({ kind: "success", message: "Email verified successfully." });
-      // Redirect immediately to avoid delayed router actions during HMR/unmount.
+      // Avoid delayed redirects during HMR/unmount; push immediately.
       router.push("/login");
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Verification failed. Please try again.";
