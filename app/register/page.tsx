@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPostJson } from "../lib/api";
+import { apiPostJson, ApiError } from "../lib/api";
 
 type RoleType = "client" | "freelancer";
 
@@ -83,20 +83,20 @@ export default function RegisterPage() {
     // Redirect immediately; don't show failure/success messages on this page.
     setStatusMessage("");
 
-    // Redirect immediately to the verification page (OTP entry UX),
-    // while the backend finishes registration + email sending in the background.
-    router.push(`/verify?email=${encodeURIComponent(trimmedEmail)}`);
+    try {
+      await apiPostJson<{ message: string; email: string }>("/api/auth/register", {
+        name,
+        email: trimmedEmail,
+        password,
+        role: selectedRole,
+      });
 
-    void apiPostJson<{ message: string; email: string }>("/api/auth/register", {
-      name,
-      email: trimmedEmail,
-      password,
-      role: selectedRole,
-    }).catch((err) => {
-      // Intentionally do not show a "Registration failed" message on the register form.
-      // If the code never arrives, the verification page will naturally show an error.
-      // Suppress console noise since the UX is redirect-first.
-    });
+      router.push(`/verify?email=${encodeURIComponent(trimmedEmail)}`);
+    } catch (err) {
+      setIsSubmitting(false);
+      const message = err instanceof ApiError ? err.message : "Registration failed. Please try again.";
+      setStatusMessage(message);
+    }
   };
 
   const selectedRoleData = roleOptions.find((option) => option.key === selectedRole);
@@ -266,7 +266,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {statusMessage ? <p className="text-sm text-zinc-600">{statusMessage}</p> : null}
+                {statusMessage ? <p className="text-sm text-red-600 font-medium">{statusMessage}</p> : null}
 
                 <div className="flex items-start gap-3 rounded-3xl border border-zinc-200 bg-[#F8FAFC] p-4">
                   <label className="flex items-center gap-3 text-sm text-zinc-700">
