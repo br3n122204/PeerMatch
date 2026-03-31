@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, ReactNode, useState } from "react";
-import { User } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { apiPostJson } from "../lib/api";
 
 type RoleType = "client" | "freelancer";
 
@@ -46,6 +47,7 @@ const roleOptions: Array<{
 ];
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [stage, setStage] = useState<"role" | "form">("role");
   const [selectedRole, setSelectedRole] = useState<RoleType | "">("");
   const [firstName, setFirstName] = useState("");
@@ -54,8 +56,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!firstName || !lastName || !email || !password) {
@@ -68,12 +71,32 @@ export default function RegisterPage() {
       return;
     }
 
-    setStatusMessage("Creating your account...");
+    if (!selectedRole) {
+      setStatusMessage("Please choose a role before continuing.");
+      return;
+    }
 
-    // TODO: replace this with your real registration logic
-    setTimeout(() => {
-      setStatusMessage(`Account created for ${firstName} ${lastName}.`);
-    }, 500);
+    const trimmedEmail = email.trim();
+    const name = `${firstName.trim()} ${lastName.trim()}`.trim();
+
+    setIsSubmitting(true);
+    // Redirect immediately; don't show failure/success messages on this page.
+    setStatusMessage("");
+
+    // Redirect immediately to the verification page (OTP entry UX),
+    // while the backend finishes registration + email sending in the background.
+    router.push(`/verify?email=${encodeURIComponent(trimmedEmail)}`);
+
+    void apiPostJson<{ message: string; email: string }>("/api/auth/register", {
+      name,
+      email: trimmedEmail,
+      password,
+      role: selectedRole,
+    }).catch((err) => {
+      // Intentionally do not show a "Registration failed" message on the register form.
+      // If the code never arrives, the verification page will naturally show an error.
+      // Suppress console noise since the UX is redirect-first.
+    });
   };
 
   const selectedRoleData = roleOptions.find((option) => option.key === selectedRole);
@@ -81,7 +104,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
-        <div className="flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
+        <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
           <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
           <div className="mt-4 text-center">
             <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
@@ -89,7 +112,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.14)] animate-fade-in-up">
+        <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
           {stage === "role" ? (
             <>
               <h1 className="text-3xl font-semibold text-[#0F172A]">Join as a client or freelancer</h1>
@@ -108,7 +131,7 @@ export default function RegisterPage() {
                         setSelectedRole((current) => (current === role.key ? "" : role.key));
                         setStatusMessage("");
                       }}
-                      className={`group cursor-pointer flex flex-col justify-between rounded-[2rem] border p-6 text-left transition duration-300 ease-out motion-safe:transform motion-safe:hover:-translate-y-1 ${
+                      className={`ui-interactive group cursor-pointer flex flex-col justify-between rounded-[2rem] border p-6 text-left motion-safe:transform motion-safe:hover:-translate-y-0.5 ${
                         isSelected
                           ? "border-[#0069A8] bg-[#EBF8FF] shadow-[0_18px_55px_rgba(0,105,168,0.16)] ring-2 ring-[#B8E3FF]"
                           : "border-zinc-200 bg-[#F8FAFC] hover:border-[#0069A8] hover:bg-white hover:shadow-[0_16px_40px_rgba(0,0,0,0.08)]"
@@ -143,7 +166,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => selectedRole && setStage("form")}
                   disabled={!selectedRole}
-                  className="inline-flex cursor-pointer items-center justify-center rounded-3xl bg-[#FA642C] px-6 py-4 text-sm font-semibold text-white transition duration-300 ease-out disabled:cursor-not-allowed disabled:bg-zinc-300 hover:bg-[#e05625] motion-safe:hover:-translate-y-0.5"
+                  className="ui-interactive inline-flex cursor-pointer items-center justify-center rounded-3xl bg-[#FA642C] px-6 py-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-zinc-300 hover:bg-[#e05625] motion-safe:hover:-translate-y-0.5"
                 >
                   Continue
                 </button>
@@ -159,7 +182,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setStage("role")}
-                  className="cursor-pointer text-sm font-semibold text-[#0069A8] hover:text-[#004f7d]"
+                  className="ui-interactive cursor-pointer text-sm font-semibold text-[#0069A8] hover:text-[#004f7d] motion-safe:hover:-translate-y-0.5"
                 >
                   Change role
                 </button>
@@ -178,7 +201,7 @@ export default function RegisterPage() {
                       value={firstName}
                       onChange={(event) => setFirstName(event.target.value)}
                       placeholder="First Name"
-                      className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                      className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                     />
                   </div>
                   <div>
@@ -192,7 +215,7 @@ export default function RegisterPage() {
                       value={lastName}
                       onChange={(event) => setLastName(event.target.value)}
                       placeholder="Last Name"
-                      className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                      className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                     />
                   </div>
                 </div>
@@ -215,7 +238,7 @@ export default function RegisterPage() {
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="Institutional Email"
-                      className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                      className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                     />
                   </div>
                 </div>
@@ -238,14 +261,12 @@ export default function RegisterPage() {
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder="Password"
-                      className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                      className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                     />
                   </div>
                 </div>
 
-                {statusMessage ? (
-                  <p className="text-sm text-red-600">{statusMessage}</p>
-                ) : null}
+                {statusMessage ? <p className="text-sm text-zinc-600">{statusMessage}</p> : null}
 
                 <div className="flex items-start gap-3 rounded-3xl border border-zinc-200 bg-[#F8FAFC] p-4">
                   <label className="flex items-center gap-3 text-sm text-zinc-700">
@@ -266,14 +287,15 @@ export default function RegisterPage() {
 
                 <button
                   type="submit"
-                  className="cursor-pointer w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(250,100,44,0.22)] transition hover:bg-[#e05625]"
+                  disabled={isSubmitting}
+                  className="ui-interactive cursor-pointer w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(250,100,44,0.22)] hover:bg-[#e05625] disabled:cursor-not-allowed disabled:bg-zinc-300 motion-safe:hover:-translate-y-0.5"
                 >
-                  Create account
+                  {isSubmitting ? "Creating..." : "Create account"}
                 </button>
               </form>
 
               <div className="mt-6 text-center text-sm text-[#0069A8]">
-                <Link href="/login" className="font-semibold hover:text-[#004f7d]">
+                <Link href="/login" className="ui-interactive font-semibold hover:text-[#004f7d] motion-safe:hover:-translate-y-0.5">
                   Already have an account? Login here
                 </Link>
               </div>

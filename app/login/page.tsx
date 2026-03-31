@@ -27,7 +27,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
       <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
-        <div className="flex h-24 w-full max-w-xl items-center justify-center rounded-full bg-white/80 px-6 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
+        <div className="ui-page-enter ui-surface flex h-24 w-full max-w-xl items-center justify-center rounded-full bg-white/80 px-6 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
           <div className="flex items-center gap-4">
             <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
             <div>
@@ -37,7 +37,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="w-full max-w-sm rounded-[2rem] bg-white px-8 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.12)]">
+        <div className="ui-page-enter ui-surface w-full max-w-sm rounded-[2rem] bg-white px-8 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.12)]">
           <h1 className="text-3xl font-semibold text-[#0F172A]">Log in to PeerMatch</h1>
           <p className="mt-3 text-sm text-zinc-600">Use your institutional email to access your account.</p>
 
@@ -61,7 +61,7 @@ export default function LoginPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="Institutional Email"
                   required
-                  className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                  className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                 />
               </div>
             </div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Password"
                   required
-                  className="w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none transition focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
+                  className="ui-input w-full rounded-3xl border border-zinc-200 bg-[#F8FAFC] py-4 pl-14 pr-4 text-sm text-[#0F172A] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30"
                 />
               </div>
             </div>
@@ -96,7 +96,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white transition hover:bg-[#df531f]"
+              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5"
             >
               Continue
             </button>
@@ -104,7 +104,7 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-zinc-600">
             Don&apos;t have PeerMatch account?{' '}
-            <Link href="/register" className="font-semibold text-[#0069A8] hover:text-[#004f7d]">
+            <Link href="/register" className="ui-interactive font-semibold text-[#0069A8] hover:text-[#004f7d] motion-safe:hover:-translate-y-0.5">
               Sign up
             </Link>
           </p>
