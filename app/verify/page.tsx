@@ -1,0 +1,203 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiPostJson, ApiError } from "../lib/api";
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function isSixDigits(value: string) {
+  return /^\d{6}$/.test(value);
+}
+
+export default function VerifyPage() {
+  const router = useRouter();
+  const [emailFromQuery, setEmailFromQuery] = useState(() => {
+    // Guard for SSR/prerender: this page is client-only UX, but Next may prerender it.
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("email") || "").trim();
+  });
+
+  // Avoid `useSearchParams()` prerender/suspense requirements by reading query params on the client.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setEmailFromQuery((params.get("email") || "").trim());
+  }, []);
+
+  const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ""));
+  const [status, setStatus] = useState<{ kind: "idle" | "error" | "success"; message: string }>({
+    kind: "idle",
+    message: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const code = useMemo(() => digits.join(""), [digits]);
+  const canSubmit = emailFromQuery.length > 0 && isSixDigits(code) && !isSubmitting;
+
+  const setDigitAt = (index: number, next: string) => {
+    setDigits((prev) => {
+      const copy = [...prev];
+      copy[index] = next;
+      return copy;
+    });
+  };
+
+  const focusIndex = (index: number) => {
+    const el = inputRefs.current[index];
+    if (el) el.focus();
+  };
+
+  const handleChange = (index: number, raw: string) => {
+    if (status.kind !== "idle") setStatus({ kind: "idle", message: "" });
+
+    const cleaned = onlyDigits(raw);
+    if (cleaned.length === 0) {
+      setDigitAt(index, "");
+      return;
+    }
+
+    // If the user pastes multiple digits into a single box, distribute them.
+    const chars = cleaned.slice(0, 6).split("");
+    if (chars.length > 1) {
+      setDigits((prev) => {
+        const next = [...prev];
+        for (let i = 0; i < 6; i++) next[i] = chars[i] || "";
+        return next;
+      });
+      focusIndex(Math.min(chars.length, 6) - 1);
+      return;
+    }
+
+    setDigitAt(index, cleaned);
+    if (index < 5) focusIndex(index + 1);
+  };
+
+  const handleKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace") {
+      if (digits[index]) {
+        setDigitAt(index, "");
+        return;
+      }
+      if (index > 0) {
+        focusIndex(index - 1);
+        setDigitAt(index - 1, "");
+      }
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      focusIndex(index - 1);
+      return;
+    }
+
+    if (event.key === "ArrowRight" && index < 5) {
+      event.preventDefault();
+      focusIndex(index + 1);
+      return;
+    }
+
+    if (event.key === "Enter" && canSubmit) {
+      void handleSubmit();
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!emailFromQuery) {
+      setStatus({ kind: "error", message: "Missing email. Please return to registration and try again." });
+      return;
+    }
+
+    if (!isSixDigits(code)) {
+      setStatus({ kind: "error", message: "Please enter the 6-digit code." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatus({ kind: "idle", message: "" });
+
+    try {
+      await apiPostJson<{ message: string; email: string }>("/api/auth/verify", {
+        email: emailFromQuery,
+        code,
+      });
+
+      setStatus({ kind: "success", message: "Email verified successfully." });
+      setTimeout(() => router.push("/login"), 700);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Verification failed. Please try again.";
+      setStatus({ kind: "error", message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
+        <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
+          <div className="flex items-center gap-4">
+            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+            <div className="mt-0 text-center sm:text-left">
+              <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
+              <p className="text-sm text-zinc-500">Student Collaboration</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-12 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
+          <h1 className="text-center text-3xl font-semibold text-[#0F172A]">Please Verify Account</h1>
+          <p className="mt-4 text-center text-sm leading-6 text-zinc-600">Enter the 6-digit we sent to your email address</p>
+
+          <div className="mt-10 flex w-full justify-center gap-3">
+            {digits.map((value, index) => (
+              <input
+                key={index}
+                ref={(el) => {
+                  inputRefs.current[index] = el;
+                }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={1}
+                value={value}
+                onChange={(e) => handleChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                aria-label={`Digit ${index + 1}`}
+                className={`ui-input h-16 w-14 rounded-lg border bg-white text-center text-2xl font-semibold text-[#0F172A] shadow-[0_10px_20px_rgba(0,0,0,0.08)] outline-none focus:border-[#0069A8] focus:ring-2 focus:ring-[#66A5CC]/30 ${
+                  status.kind === "error" ? "border-red-400" : "border-zinc-200"
+                }`}
+              />
+            ))}
+          </div>
+
+          {status.kind !== "idle" ? (
+            <p
+              className={`mt-6 text-center text-sm ${
+                status.kind === "success" ? "text-emerald-700" : "text-red-600"
+              }`}
+              role={status.kind === "error" ? "alert" : undefined}
+            >
+              {status.message}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            className="ui-interactive mt-10 w-full rounded-2xl bg-[#FA642C] py-4 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(250,100,44,0.22)] hover:bg-[#e05625] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          >
+            {isSubmitting ? "Verifying..." : "Verify & Continue"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

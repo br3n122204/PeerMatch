@@ -3,9 +3,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
-
-@theme inline {
+  /* Tailwind v4 'theme tokens' equivalents (avoid @theme lint warnings) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -16,6 +14,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
   }
 }
 
@@ -32,6 +32,57 @@
 
 .animate-fade-in-up {
   animation: fadeInUp 0.35s ease-out both;
+}
+
+@keyframes routeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ui-route-enter {
+  animation: routeFadeIn 260ms ease-out both;
+}
+
+.ui-page-enter {
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+.ui-surface {
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+
+.ui-interactive {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.ui-input {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-route-enter,
+  .ui-page-enter,
+  .animate-fade-in-up {
+    animation: none;
+  }
 }
 
 body {
