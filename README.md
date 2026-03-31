@@ -16,6 +16,18 @@ Copy the example environment file and configure MongoDB:
 cp .env.example .env
 ```
 
+Configure SMTP for institutional Outlook verification emails:
+
+- `INSTITUTIONAL_EMAIL_DOMAIN` (default: `cit.edu`)
+- `EMAIL_HOST` (Office365: `smtp.office365.com`)
+- `EMAIL_PORT` (Office365: `587`)
+- `EMAIL_SECURE` (`false` for Office365 on port 587)
+- `EMAIL_REQUIRE_TLS` (`true` for Office365)
+- `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`
+
+When a user registers or requests resend, the backend sends a 6-digit verification code email.
+If SMTP delivery fails, the API returns an error instead of silently continuing.
+
 Start both frontend and backend in development:
 
 ```bash

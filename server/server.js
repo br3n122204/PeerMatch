@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 
@@ -11,6 +12,17 @@ app.use(cors());
 app.use(express.json());
 
 connectDB();
+
+app.use('/api/auth', (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      message:
+        'Database is unavailable. Start MongoDB or set MONGODB_URI, then try again.',
+    });
+  }
+
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.get('/', (req, res) => res.send('PeerMatch MERN API is running'));
