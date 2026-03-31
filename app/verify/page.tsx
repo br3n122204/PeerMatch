@@ -129,7 +129,8 @@ export default function VerifyPage() {
       });
 
       setStatus({ kind: "success", message: "Email verified successfully." });
-      setTimeout(() => router.push("/login"), 700);
+      // Avoid delayed redirects during HMR/unmount; push immediately.
+      router.push("/login");
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Verification failed. Please try again.";
       setStatus({ kind: "error", message });
