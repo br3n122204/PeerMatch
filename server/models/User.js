@@ -9,7 +9,8 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  // Role options exposed in the frontend registration flow.
+  role: { type: String, enum: ['user', 'admin', 'client', 'freelancer'], default: 'user' },
   verified: { type: Boolean, default: false },
   verification: { type: verificationSchema },
   createdAt: { type: Date, default: Date.now },

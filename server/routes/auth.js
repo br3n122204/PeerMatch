@@ -45,10 +45,13 @@ router.post('/register', async (req, res) => {
       },
     });
 
-    await sendVerificationEmail(user.email, user.name, verificationCode);
+    const emailResult = await sendVerificationEmail(user.email, user.name, verificationCode);
 
     res.status(201).json({
-      message: 'User registered successfully. Verification code sent to email.',
+      message:
+        emailResult && emailResult.delivered
+          ? 'User registered successfully. Verification code sent to email.'
+          : 'User registered successfully. Verification code generated (email may have failed in development).',
       email: user.email,
     });
   } catch (error) {
