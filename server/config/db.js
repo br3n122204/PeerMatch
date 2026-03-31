@@ -4,14 +4,13 @@ const connectDB = async () => {
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/peer-match';
 
   try {
-    await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(uri);
     console.log('MongoDB connected');
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
-    process.exit(1);
+    // Keep the API process alive and retry so the app recovers
+    // automatically once MongoDB becomes available.
+    setTimeout(connectDB, 5000);
   }
 };
 
