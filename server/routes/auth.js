@@ -96,6 +96,49 @@ router.post('/verify', async (req, res) => {
   }
 });
 
+// Resend a new verification code (primarily used after expiry).
+router.post('/resend', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Please provide email.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (user.verified) {
+      return res.status(200).json({ message: 'User already verified.' });
+    }
+
+    const verificationCode = generateVerificationCode();
+    const expiresAt = getVerificationExpiration();
+
+    user.verification = {
+      code: verificationCode,
+      expiresAt,
+    };
+
+    await user.save();
+
+    const emailResult = await sendVerificationEmail(user.email, user.name, verificationCode);
+
+    res.status(200).json({
+      message:
+        emailResult && emailResult.delivered
+          ? 'Verification code resent to email.'
+          : 'Verification code resent (email delivery may have failed in dev).',
+      email: user.email,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error during resend.' });
+  }
+});
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
