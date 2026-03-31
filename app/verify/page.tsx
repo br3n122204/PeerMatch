@@ -34,11 +34,14 @@ export default function VerifyPage() {
     message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = useMemo(() => digits.join(""), [digits]);
   const canSubmit = emailFromQuery.length > 0 && isSixDigits(code) && !isSubmitting;
+  const canResend = Boolean(emailFromQuery) && !isResending && resendCooldown === 0;
 
   const setDigitAt = (index: number, next: string) => {
     setDigits((prev) => {
@@ -139,6 +142,32 @@ export default function VerifyPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (!emailFromQuery) return;
+    if (!canResend) return;
+
+    setIsResending(true);
+    setStatus({ kind: "idle", message: "" });
+
+    try {
+      await apiPostJson<{ message: string; email: string }>("/api/auth/resend", {
+        email: emailFromQuery,
+      });
+
+      setDigits(Array.from({ length: 6 }, () => ""));
+      setStatus({ kind: "success", message: "A new verification code was sent." });
+      // Cooldown to prevent spam/resend loops.
+      setResendCooldown(30);
+      setTimeout(() => setResendCooldown(0), 30000);
+      focusIndex(0);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not resend the code. Please try again.";
+      setStatus({ kind: "error", message });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
@@ -196,6 +225,22 @@ export default function VerifyPage() {
           >
             {isSubmitting ? "Verifying..." : "Verify & Continue"}
           </button>
+
+          <div className="mt-4 text-center text-sm text-zinc-600">
+            <span>Didn't receive the code? </span>
+            <button
+              type="button"
+              onClick={() => void handleResend()}
+              disabled={!canResend}
+              className={`underline text-[#0069A8] hover:text-[#004f7d] disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {isResending
+                ? "Resending..."
+                : resendCooldown > 0
+                  ? `Resend code (in ${resendCooldown}s)`
+                  : "Resend code"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
