@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const PendingRegistration = require('../models/PendingRegistration');
 const { sendVerificationEmail } = require('../utils/mailer');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, signAccessToken, attachAccessTokenCookie } = require('../middleware/auth');
 const authController = require('../controllers/authController');
 
 const router = express.Router();
@@ -125,7 +125,7 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ message: 'Verification code has expired.' });
     }
 
-    await User.create({
+    const createdUser = await User.create({
       name: pending.name,
       email: pending.email,
       password: pending.password,
@@ -137,10 +137,85 @@ router.post('/verify', async (req, res) => {
 
     await PendingRegistration.deleteOne({ _id: pending._id });
 
-    return res.json({ message: 'Email verified successfully. Account created.', email: normalizedEmail });
+    // Log the user in immediately so they can complete their profile.
+    const token = signAccessToken(createdUser);
+    attachAccessTokenCookie(res, token);
+
+    return res.json({
+      message: 'Email verified successfully. Account created.',
+      user: {
+        id: createdUser._id,
+        name: createdUser.name,
+        email: createdUser.email,
+        role: createdUser.role,
+        ...(createdUser.accountType ? { accountType: createdUser.accountType } : {}),
+      },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during verification.' });
+  }
+});
+
+router.post('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { course, yearLevel, aboutMe, skills, photoDataUrl } = req.body || {};
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+
+    if (!user.verified) {
+      return res.status(403).json({ message: 'Please verify your email before completing your profile.' });
+    }
+
+    const courseStr = String(course || '').trim();
+    const yearLevelStr = String(yearLevel || '').trim();
+    const aboutMeStr = String(aboutMe || '').trim();
+    const skillsStr = String(skills || '').trim();
+    const photoStr = typeof photoDataUrl === 'string' ? photoDataUrl : undefined;
+
+    if (!courseStr || !yearLevelStr || !aboutMeStr) {
+      return res.status(400).json({ message: 'Please complete all required fields.' });
+    }
+
+    if (user.accountType === 'freelancer' && !skillsStr) {
+      return res.status(400).json({ message: 'Please provide your skills.' });
+    }
+
+    user.course = courseStr;
+    user.yearLevel = yearLevelStr;
+    user.aboutMe = aboutMeStr;
+    if (user.accountType === 'freelancer') {
+      user.skills = skillsStr;
+    }
+    if (photoStr) {
+      user.photoDataUrl = photoStr;
+    }
+    user.profileCompleted = true;
+
+    await user.save();
+
+    return res.json({
+      message: 'Profile saved.',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        verified: user.verified,
+        ...(user.accountType ? { accountType: user.accountType } : {}),
+        ...(user.course ? { course: user.course } : {}),
+        ...(user.yearLevel ? { yearLevel: user.yearLevel } : {}),
+        ...(user.aboutMe ? { aboutMe: user.aboutMe } : {}),
+        ...(user.skills ? { skills: user.skills } : {}),
+        profileCompleted: user.profileCompleted,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error saving profile.' });
   }
 });
 

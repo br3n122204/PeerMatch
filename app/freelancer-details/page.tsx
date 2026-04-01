@@ -1,17 +1,22 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Button from "../components/Button";
+import { useRouter } from "next/navigation";
+import { apiPostJson, ApiError } from "../lib/api";
 
-const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduate"];
+const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 export default function FreelancerDetailsPage() {
+  const router = useRouter();
   const [course, setCourse] = useState("");
   const [yearLevel, setYearLevel] = useState(yearLevels[0]);
   const [skills, setSkills] = useState("");
   const [aboutMe, setAboutMe] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(
     "https://api.dicebear.com/7.x/avataaars/svg?seed=FreelancerDetails"
   );
@@ -35,9 +40,37 @@ export default function FreelancerDetailsPage() {
     fileInputRef.current?.click();
   };
 
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(file);
+    });
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    console.log("Freelancer details submitted:", { course, yearLevel, skills, aboutMe, photoFile });
+    if (isSubmitting) return;
+    void (async () => {
+      setIsSubmitting(true);
+      setStatusMessage("");
+      try {
+        const photoDataUrl = photoFile ? await fileToDataUrl(photoFile) : undefined;
+        await apiPostJson("/api/auth/profile", {
+          course,
+          yearLevel,
+          skills,
+          aboutMe,
+          ...(photoDataUrl ? { photoDataUrl } : {}),
+        });
+        router.push("/client-home");
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Could not save profile. Please try again.";
+        setStatusMessage(message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
   };
 
   return (
@@ -132,7 +165,14 @@ export default function FreelancerDetailsPage() {
               </label>
 
               <div className="pt-2">
-                <Button type="submit" className="w-full">Continue</Button>
+                <Button type="submit" disabled={isSubmitting} className="w-full">
+                  {isSubmitting ? "Saving..." : "Continue"}
+                </Button>
+                {statusMessage ? (
+                  <p className="mt-3 text-center text-sm text-red-600" role="alert">
+                    {statusMessage}
+                  </p>
+                ) : null}
               </div>
             </form>
           </div>
