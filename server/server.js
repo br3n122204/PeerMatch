@@ -13,7 +13,6 @@ const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:3000,http://loc
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 const app = express();
-
 if (process.env.TRUST_PROXY === '1') {
   app.set('trust proxy', 1);
 }

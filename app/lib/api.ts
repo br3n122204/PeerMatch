@@ -91,4 +91,3 @@ export async function apiGetJson<TResponse>(
 
   return payload as TResponse;
 }
-
