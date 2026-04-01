@@ -3,25 +3,42 @@
 import Image from "next/image";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { apiPostJson, ApiError } from "../lib/api";
+
+type LoginResponse = {
+  user: { id: string; name: string; email: string; role: string };
+};
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email || !password) {
       setStatusMessage("Please enter both email and password.");
       return;
     }
 
+    setIsSubmitting(true);
     setStatusMessage("Signing in...");
 
-    // TODO: replace this with your real authentication logic
-    setTimeout(() => {
-      setStatusMessage(`Signed in as ${email}.`);
-    }, 500);
+    try {
+      const data = await apiPostJson<LoginResponse>("/api/auth/login", { email, password });
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("peermatch_role", data.user.role);
+      }
+      router.push("/");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
+      setStatusMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,9 +113,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5"
+              disabled={isSubmitting}
+              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
-              Continue
+              {isSubmitting ? "Signing in..." : "Continue"}
             </button>
           </form>
 
