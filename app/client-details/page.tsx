@@ -126,16 +126,8 @@ export default function ClientDetailsPage() {
         <header className="sticky top-0 z-50 w-full">
           <div className="w-full rounded-b-[2rem] border-b border-slate-200/70 bg-white/95 px-6 py-4 shadow-sm shadow-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/80">
             <div className="mx-auto flex w-full max-w-[1120px] items-center justify-center">
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0069A8]/10">
-                  <Image
-                    src="/logo.png"
-                    alt="PeerMatch logo"
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 object-contain"
-                  />
-                </div>
+              <div className="flex items-center gap-3 px-1 py-1">
+                <Image src="/logo.png" alt="PeerMatch logo" width={28} height={28} className="h-7 w-7 object-contain" />
                 <div className="leading-tight">
                   <p className="text-base font-semibold text-slate-950">PeerMatch</p>
                   <p className="text-xs text-slate-500">Student Collaboration</p>
