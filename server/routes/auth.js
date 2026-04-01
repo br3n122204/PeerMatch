@@ -1,9 +1,76 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { sendVerificationEmail } = require('../utils/mailer');
 
 const router = express.Router();
+
+function getCookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+}
+
+function serializeCookie(name, value, options) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (options.maxAge != null) parts.push(`Max-Age=${Math.floor(options.maxAge / 1000)}`);
+  if (options.path) parts.push(`Path=${options.path}`);
+  if (options.httpOnly) parts.push('HttpOnly');
+  if (options.secure) parts.push('Secure');
+  if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
+  return parts.join('; ');
+}
+
+function parseCookies(cookieHeader) {
+  const out = {};
+  if (!cookieHeader) return out;
+  const pairs = cookieHeader.split(';');
+  for (const pair of pairs) {
+    const idx = pair.indexOf('=');
+    if (idx === -1) continue;
+    const key = pair.slice(0, idx).trim();
+    const val = pair.slice(idx + 1).trim();
+    if (!key) continue;
+    out[key] = decodeURIComponent(val);
+  }
+  return out;
+}
+
+// In-memory sessions (no extra packages). Note: resets on server restart.
+const sessions = new Map(); // token -> { userId, role, expiresAt }
+
+function createSession(user) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  sessions.set(token, { userId: String(user._id), role: user.role, expiresAt });
+  return token;
+}
+
+function getSessionFromRequest(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.peerMatchSession;
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session) return null;
+  if (session.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+  return { token, ...session };
+}
+
+function requireAuth(req, res, next) {
+  const session = getSessionFromRequest(req);
+  if (!session) return res.status(401).json({ message: 'Not authenticated.' });
+  req.session = session;
+  next();
+}
 
 // Generate a random 6-digit numeric verification code.
 function generateVerificationCode() {
@@ -183,10 +250,33 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ message: 'Please verify your email before logging in.' });
     }
 
+    const token = createSession(user);
+    res.setHeader('Set-Cookie', serializeCookie('peerMatchSession', token, getCookieOptions()));
     res.json({ id: user._id, name: user.name, email: user.email, role: user.role });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during login.' });
+  }
+});
+
+router.post('/logout', (req, res) => {
+  const session = getSessionFromRequest(req);
+  if (session?.token) sessions.delete(session.token);
+  res.setHeader(
+    'Set-Cookie',
+    serializeCookie('peerMatchSession', '', { ...getCookieOptions(), maxAge: 0 })
+  );
+  res.json({ message: 'Logged out.' });
+});
+
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId).select('_id name email role');
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ id: user._id, name: user.name, email: user.email, role: user.role });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error fetching user.' });
   }
 });
 
