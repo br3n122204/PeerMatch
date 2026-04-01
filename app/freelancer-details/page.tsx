@@ -41,21 +41,21 @@ export default function FreelancerDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#D8F3E9] px-4 py-10">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <div className="rounded-[2rem] bg-white px-6 py-5 shadow-sm shadow-slate-200">
-          <div className="mx-auto flex w-full max-w-[1120px] flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[1.75rem] bg-[#DEF7EC] shadow-sm">
-              <Image src="/logo.png" alt="PeerMatch logo" width={36} height={36} className="h-10 w-10 object-contain" />
-            </div>
-            <div className="text-center sm:text-left">
-              <p className="text-2xl font-semibold text-slate-950">PeerMatch</p>
-              <p className="text-sm text-slate-500">Student Collaboration</p>
-            </div>
+    <div className="min-h-screen bg-[#D8F3E9] px-0 py-0">
+      <div className="w-full rounded-[2rem] bg-white px-6 py-8 shadow-sm shadow-slate-200">
+        <div className="mx-auto flex w-full max-w-[1120px] flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-[1.75rem] bg-[#DEF7EC] shadow-sm">
+            <Image src="/logo.png" alt="PeerMatch logo" width={36} height={36} className="h-10 w-10 object-contain" />
+          </div>
+          <div className="text-center sm:text-left">
+            <p className="text-2xl font-semibold text-slate-950">PeerMatch</p>
+            <p className="text-sm text-slate-500">Student Collaboration</p>
           </div>
         </div>
+      </div>
 
-        <div className="mx-auto w-full max-w-[1120px]">
+      <div className="mx-auto mt-10 w-full max-w-6xl px-4 pb-10">
+        <div className="w-full max-w-[1120px]">
           <div className="text-center">
             <h1 className="text-3xl font-semibold text-slate-950">Freelancer Details</h1>
             <p className="mt-2 text-sm text-slate-600">Complete your profile to get started</p>
