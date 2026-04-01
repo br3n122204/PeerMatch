@@ -3,6 +3,12 @@
 import Image from "next/image";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { apiPostJson, ApiError } from "../lib/api";
+
+type LoginResponse = {
+  user: { id: string; name: string; email: string; role: string };
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,10 +27,24 @@ export default function LoginPage() {
     setIsSubmitting(true);
     setStatusMessage("Signing in...");
 
-    // TODO: replace this with your real authentication logic
-    setTimeout(() => {
-      setStatusMessage(`Signed in as ${email}.`);
-    }, 500);
+    try {
+      const data = await apiPostJson<LoginResponse>("/api/auth/login", {
+        email: email.trim(),
+        password,
+      });
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("peermatch_role", data.user.role);
+      }
+      router.push("/");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Login failed. Please try again.";
+      setStatusMessage(message);
+      if (err instanceof ApiError && err.status === 403 && message.toLowerCase().includes("verify")) {
+        router.push(`/verify?email=${encodeURIComponent(email.trim())}`);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -99,7 +119,8 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5"
+              disabled={isSubmitting}
+              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               Continue
             </button>

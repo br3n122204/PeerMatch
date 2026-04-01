@@ -1,9 +1,14 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
 const { sendVerificationEmail } = require('../utils/mailer');
+const { authMiddleware } = require('../middleware/auth');
+const authController = require('../controllers/authController');
 
 const router = express.Router();
+
+const REGISTER_ACCOUNT_TYPES = ['client', 'freelancer'];
 
 // Generate a random 6-digit numeric verification code.
 function generateVerificationCode() {
@@ -27,12 +32,19 @@ function isInstitutionalEmail(email) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role: registrationPersona } = req.body;
     const normalizedEmail = normalizeEmail(email);
 
     if (!name || !normalizedEmail || !password) {
       return res.status(400).json({ message: 'Please provide name, email, and password.' });
     }
+
+    if (String(registrationPersona || '').toLowerCase() === 'admin') {
+      return res.status(400).json({ message: 'Admin accounts cannot be created through public registration.' });
+    }
+
+    const persona = String(registrationPersona || '').toLowerCase();
+    const accountType = REGISTER_ACCOUNT_TYPES.includes(persona) ? persona : undefined;
 
     if (!isInstitutionalEmail(normalizedEmail)) {
       return res.status(400).json({ message: 'Please use your institutional Outlook email (e.g., name@cit.edu).' });
@@ -47,30 +59,38 @@ router.post('/register', async (req, res) => {
     const verificationCode = generateVerificationCode();
     const expiresAt = getVerificationExpiration();
 
-    const user = await User.create({
-      name,
-      email: normalizedEmail,
-      password: hashedPassword,
-      role: role || 'user',
-      verified: false,
-      verification: {
-        code: verificationCode,
-        expiresAt,
-      },
-    });
+    // IMPORTANT: Do not create a real `User` until verification succeeds.
+    // If the user tries to register again with the same email, rotate the code and resend.
+    let pending = await PendingRegistration.findOne({ email: normalizedEmail });
+
+    if (pending) {
+      pending.name = name;
+      pending.password = hashedPassword;
+      pending.accountType = accountType;
+      pending.verification = { code: verificationCode, expiresAt };
+      await pending.save();
+    } else {
+      pending = await PendingRegistration.create({
+        name,
+        email: normalizedEmail,
+        password: hashedPassword,
+        ...(accountType ? { accountType } : {}),
+        verification: { code: verificationCode, expiresAt },
+      });
+    }
 
     try {
-      await sendVerificationEmail(user.email, user.name, verificationCode);
+      await sendVerificationEmail(pending.email, pending.name, verificationCode);
     } catch (mailError) {
-      await User.deleteOne({ _id: user._id });
+      await PendingRegistration.deleteOne({ _id: pending._id });
       return res.status(502).json({
         message: `Registration failed because verification email could not be delivered: ${mailError.message}`,
       });
     }
 
-    res.status(201).json({
-      message: 'User registered successfully. Verification code sent to email.',
-      email: user.email,
+    return res.status(201).json({
+      message: 'Verification code sent to email. Enter the code to create your account.',
+      email: pending.email,
     });
   } catch (error) {
     console.error(error);
@@ -87,28 +107,37 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ message: 'Please provide email and verification code.' });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+    const alreadyUser = await User.findOne({ email: normalizedEmail });
+    if (alreadyUser) {
+      return res.status(409).json({ message: 'Email is already registered. Please log in.', email: normalizedEmail });
     }
 
-    if (user.verified) {
-      return res.status(200).json({ message: 'User already verified.' });
+    const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+    if (!pending) {
+      return res.status(404).json({ message: 'No pending registration found. Please register again.' });
     }
 
-    if (!user.verification || user.verification.code !== code) {
+    if (!pending.verification || pending.verification.code !== String(code)) {
       return res.status(400).json({ message: 'Invalid verification code.' });
     }
 
-    if (user.verification.expiresAt < new Date()) {
+    if (pending.verification.expiresAt < new Date()) {
       return res.status(400).json({ message: 'Verification code has expired.' });
     }
 
-    user.verified = true;
-    user.verification = undefined;
-    await user.save();
+    await User.create({
+      name: pending.name,
+      email: pending.email,
+      password: pending.password,
+      role: 'user',
+      ...(pending.accountType ? { accountType: pending.accountType } : {}),
+      verified: true,
+      createdAt: new Date(),
+    });
 
-    res.json({ message: 'Email verified successfully.', email: user.email });
+    await PendingRegistration.deleteOne({ _id: pending._id });
+
+    return res.json({ message: 'Email verified successfully. Account created.', email: normalizedEmail });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during verification.' });
@@ -129,30 +158,27 @@ router.post('/resend', async (req, res) => {
       return res.status(400).json({ message: 'Please use your institutional Outlook email (e.g., name@cit.edu).' });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(200).json({ message: 'User already verified.', email: normalizedEmail });
     }
 
-    if (user.verified) {
-      return res.status(200).json({ message: 'User already verified.' });
+    const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+    if (!pending) {
+      return res.status(404).json({ message: 'No pending registration found. Please register again.' });
     }
 
     const verificationCode = generateVerificationCode();
     const expiresAt = getVerificationExpiration();
 
-    user.verification = {
-      code: verificationCode,
-      expiresAt,
-    };
+    pending.verification = { code: verificationCode, expiresAt };
+    await pending.save();
 
-    await user.save();
-
-    await sendVerificationEmail(user.email, user.name, verificationCode);
+    await sendVerificationEmail(pending.email, pending.name, verificationCode);
 
     res.status(200).json({
       message: 'Verification code resent to email.',
-      email: user.email,
+      email: normalizedEmail,
     });
   } catch (error) {
     console.error(error);
@@ -160,34 +186,10 @@ router.post('/resend', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const normalizedEmail = normalizeEmail(email);
+router.post('/login', (req, res) => void authController.login(req, res));
 
-    if (!normalizedEmail || !password) {
-      return res.status(400).json({ message: 'Please provide email and password.' });
-    }
+router.post('/logout', (req, res) => authController.logout(req, res));
 
-    const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
-
-    if (!user.verified) {
-      return res.status(403).json({ message: 'Please verify your email before logging in.' });
-    }
-
-    res.json({ id: user._id, name: user.name, email: user.email, role: user.role });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error during login.' });
-  }
-});
+router.get('/me', authMiddleware, (req, res) => void authController.getMe(req, res));
 
 module.exports = router;
