@@ -172,21 +172,26 @@ export default function VerifyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
-        <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
-          <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
-            <div className="mt-0 text-center sm:text-left">
-              <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
-              <p className="text-sm text-zinc-500">Student Collaboration</p>
+    <div className="min-h-screen bg-[#E5F6F4]">
+      <div className="flex min-h-screen w-full flex-col">
+        <header className="sticky top-0 z-50 w-full">
+          <div className="w-full rounded-b-[2rem] border-b border-slate-200/70 bg-white/95 px-6 py-4 shadow-sm shadow-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+            <div className="mx-auto flex w-full max-w-[1120px] items-center justify-center">
+              <div className="flex items-center gap-3 px-1 py-1">
+                <Image src="/logo.png" alt="PeerMatch logo" width={28} height={28} className="h-7 w-7 object-contain" />
+                <div className="leading-tight">
+                  <p className="text-base font-semibold text-slate-950">PeerMatch</p>
+                  <p className="text-xs text-slate-500">Student Collaboration</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-12 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
-          <h1 className="text-center text-3xl font-semibold text-[#0F172A]">Please Verify Account</h1>
-          <p className="mt-4 text-center text-sm leading-6 text-zinc-600">Enter the 6-digit we sent to your email address</p>
+        <main className="flex flex-1 items-start justify-center px-4 py-10">
+          <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-12 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
+            <h1 className="text-center text-3xl font-semibold text-[#0F172A]">Please Verify Account</h1>
+            <p className="mt-4 text-center text-sm leading-6 text-zinc-600">Enter the 6-digit we sent to your email address</p>
 
           <div className="mt-10 flex w-full justify-center gap-3">
             {digits.map((value, index) => (
@@ -244,7 +249,8 @@ export default function VerifyPage() {
                 : "Resend code"}
             </button>
           </div>
-        </div>
+          </div>
+        </main>
       </div>
     </div>
   );

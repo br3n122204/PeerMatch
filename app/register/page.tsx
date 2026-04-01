@@ -102,23 +102,30 @@ export default function RegisterPage() {
   const selectedRoleData = roleOptions.find((option) => option.key === selectedRole);
 
   return (
-    <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
-        <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
-          <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
-          <div className="mt-4 text-center">
-            <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
-            <p className="text-sm text-zinc-500">Student Collaboration</p>
+    <div className="min-h-screen bg-[#E5F6F4]">
+      <div className="flex min-h-screen w-full flex-col">
+        <header className="sticky top-0 z-50 w-full">
+          <div className="w-full rounded-b-[2rem] border-b border-slate-200/70 bg-white/95 px-6 py-4 shadow-sm shadow-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+            <div className="mx-auto flex w-full max-w-[1120px] items-center justify-center">
+              <div className="flex items-center gap-3 px-1 py-1">
+                <Image src="/logo.png" alt="PeerMatch logo" width={28} height={28} className="h-7 w-7 object-contain" />
+                <div className="leading-tight">
+                  <p className="text-base font-semibold text-slate-950">PeerMatch</p>
+                  <p className="text-xs text-slate-500">Student Collaboration</p>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
-          {stage === "role" ? (
-            <>
-              <h1 className="text-3xl font-semibold text-[#0F172A]">Join as a client or freelancer</h1>
-              <p className="mt-3 text-sm leading-6 text-zinc-600">
-                Choose the role that best fits your needs before continuing with registration.
-              </p>
+        <main className="flex flex-1 items-start justify-center px-4 py-10">
+          <div className="ui-page-enter ui-surface w-full max-w-xl rounded-[2.5rem] bg-white px-10 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.14)]">
+            {stage === "role" ? (
+              <>
+                <h1 className="text-3xl font-semibold text-[#0F172A]">Join as a client or freelancer</h1>
+                <p className="mt-3 text-sm leading-6 text-zinc-600">
+                  Choose the role that best fits your needs before continuing with registration.
+                </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 {roleOptions.map((role) => {
@@ -171,9 +178,9 @@ export default function RegisterPage() {
                   Continue
                 </button>
               </div>
-            </>
-          ) : (
-            <>
+              </>
+            ) : (
+              <>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h1 className="text-3xl font-semibold text-[#0F172A]">Sign up as a {selectedRoleData?.title}</h1>
@@ -299,9 +306,10 @@ export default function RegisterPage() {
                   Already have an account? Login here
                 </Link>
               </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );
