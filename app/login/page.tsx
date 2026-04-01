@@ -11,20 +11,17 @@ type LoginResponse = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email || !password) {
       setStatusMessage("Please enter both email and password.");
       return;
     }
 
-    setIsSubmitting(true);
     setStatusMessage("Signing in...");
 
     try {
@@ -122,7 +119,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
-              {isSubmitting ? "Signing in..." : "Continue"}
+              Continue
             </button>
           </form>
 
