@@ -91,7 +91,7 @@ export default function RegisterPage() {
         role: selectedRole,
       });
 
-      router.push(`/verify?email=${encodeURIComponent(trimmedEmail)}`);
+      router.push(`/verify?email=${encodeURIComponent(trimmedEmail)}&role=${selectedRole}`);
     } catch (err) {
       setIsSubmitting(false);
       const message = err instanceof ApiError ? err.message : "Registration failed. Please try again.";
@@ -105,7 +105,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-[#E5F6F4] px-4 py-10">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
         <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
-          <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+          <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
           <div className="mt-4 text-center">
             <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
             <p className="text-sm text-zinc-500">Student Collaboration</p>

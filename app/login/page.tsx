@@ -29,7 +29,7 @@ export default function LoginPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
         <div className="ui-page-enter ui-surface flex h-24 w-full max-w-xl items-center justify-center rounded-full bg-white/80 px-6 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
           <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#0069A8]">PeerMatch</p>
               <p className="text-xs text-zinc-500">Student Collaboration</p>
