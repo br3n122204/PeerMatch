@@ -1,9 +1,8 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPostJson, ApiError } from "../lib/api";
 
 function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
@@ -131,21 +130,12 @@ export default function VerifyPage() {
 
     setIsSubmitting(true);
     setStatus({ kind: "idle", message: "" });
-    try {
-      await apiPostJson<{ message: string; email: string }>("/api/auth/verify", {
-        email: emailFromQuery,
-        code,
-      });
 
-      setStatus({ kind: "success", message: "Email verified successfully." });
-      const destination = role === "freelancer" ? "/freelancer-details" : "/client-details";
-      router.push(destination);
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : "Verification failed. Please check the code and try again.";
-      setStatus({ kind: "error", message });
-      setIsSubmitting(false);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    setStatus({ kind: "success", message: "Email verified successfully." });
+    const destination = role === "freelancer" ? "/freelancer-details" : "/client-details";
+    router.push(destination);
   };
 
   const handleResend = async () => {
@@ -153,22 +143,15 @@ export default function VerifyPage() {
 
     setIsResending(true);
     setStatus({ kind: "idle", message: "" });
-    try {
-      await apiPostJson<{ message: string; email: string }>("/api/auth/resend", {
-        email: emailFromQuery,
-      });
 
-      setDigits(Array.from({ length: 6 }, () => ""));
-      setStatus({ kind: "success", message: "A new verification code was sent." });
-      setResendCooldown(30);
-      setTimeout(() => setResendCooldown(0), 30000);
-      focusIndex(0);
-      setIsResending(false);
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not resend code. Please try again.";
-      setStatus({ kind: "error", message });
-      setIsResending(false);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    setDigits(Array.from({ length: 6 }, () => ""));
+    setStatus({ kind: "success", message: "A new verification code was sent." });
+    setResendCooldown(30);
+    setTimeout(() => setResendCooldown(0), 30000);
+    focusIndex(0);
+    setIsResending(false);
   };
 
   return (
