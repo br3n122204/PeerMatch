@@ -3,25 +3,67 @@
 import Image from "next/image";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+
+type LoginResponse = {
+  user: { id: string; name: string; email: string; role: string; accountType?: string };
+};
+
+type MeResponse = {
+  user: { id: string; name: string; email: string; role: string; accountType?: string };
+};
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email || !password) {
       setStatusMessage("Please enter both email and password.");
       return;
     }
 
+    setIsSubmitting(true);
     setStatusMessage("Signing in...");
 
-    // TODO: replace this with your real authentication logic
-    setTimeout(() => {
-      setStatusMessage(`Signed in as ${email}.`);
-    }, 500);
+    try {
+      const data = await apiPostJson<LoginResponse>("/api/auth/login", {
+        email: email.trim(),
+        password,
+      });
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("peermatch_role", data.user.role);
+      }
+      const roleFromLogin = String(data.user?.role || "").toLowerCase();
+      const accountTypeFromLogin = String(data.user?.accountType || "").toLowerCase();
+      if (accountTypeFromLogin === "client" || roleFromLogin === "client") {
+        router.push("/client-home");
+        return;
+      }
+
+      // Fallback for older API responses that don't include accountType.
+      try {
+        const me = await apiGetJson<MeResponse>("/api/auth/me");
+        const role = String(me.user?.role || "").toLowerCase();
+        const accountType = String(me.user?.accountType || "").toLowerCase();
+        router.push(accountType === "client" || role === "client" ? "/client-home" : "/");
+      } catch {
+        router.push("/");
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Login failed. Please try again.";
+      setStatusMessage(message);
+      if (err instanceof ApiError && err.status === 403 && message.toLowerCase().includes("verify")) {
+        router.push(`/verify?email=${encodeURIComponent(email.trim())}`);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -29,7 +71,7 @@ export default function LoginPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
         <div className="ui-page-enter ui-surface flex h-24 w-full max-w-xl items-center justify-center rounded-full bg-white/80 px-6 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
           <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[#0069A8]">PeerMatch</p>
               <p className="text-xs text-zinc-500">Student Collaboration</p>
@@ -96,7 +138,8 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5"
+              disabled={isSubmitting}
+              className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               Continue
             </button>

@@ -16,16 +16,29 @@ function isSixDigits(value: string) {
 export default function VerifyPage() {
   const router = useRouter();
   const [emailFromQuery, setEmailFromQuery] = useState(() => {
-    // Guard for SSR/prerender: this page is client-only UX, but Next may prerender it.
     if (typeof window === "undefined") return "";
     const params = new URLSearchParams(window.location.search);
     return (params.get("email") || "").trim();
   });
+  const [role, setRole] = useState<"client" | "freelancer">(() => {
+    if (typeof window === "undefined") return "client";
+    const params = new URLSearchParams(window.location.search);
+    const queryRole = params.get("role");
+    if (queryRole === "freelancer" || queryRole === "client") return queryRole;
+    const storedRole = window.localStorage.getItem("peerMatchRole");
+    if (storedRole === "freelancer" || storedRole === "client") return storedRole;
+    return "client";
+  });
 
-  // Avoid `useSearchParams()` prerender/suspense requirements by reading query params on the client.
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     setEmailFromQuery((params.get("email") || "").trim());
+    const queryRole = params.get("role");
+    if (queryRole === "freelancer" || queryRole === "client") {
+      setRole(queryRole);
+      window.localStorage.setItem("peerMatchRole", queryRole);
+    }
   }, []);
 
   const [digits, setDigits] = useState<string[]>(Array.from({ length: 6 }, () => ""));
@@ -40,8 +53,8 @@ export default function VerifyPage() {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = useMemo(() => digits.join(""), [digits]);
-  const canSubmit = emailFromQuery.length > 0 && isSixDigits(code) && !isSubmitting;
-  const canResend = Boolean(emailFromQuery) && !isResending && resendCooldown === 0;
+  const canSubmit = isSixDigits(code) && !isSubmitting;
+  const canResend = !isResending && resendCooldown === 0;
 
   const setDigitAt = (index: number, next: string) => {
     setDigits((prev) => {
@@ -65,7 +78,6 @@ export default function VerifyPage() {
       return;
     }
 
-    // If the user pastes multiple digits into a single box, distribute them.
     const chars = cleaned.slice(0, 6).split("");
     if (chars.length > 1) {
       setDigits((prev) => {
@@ -112,11 +124,6 @@ export default function VerifyPage() {
   };
 
   const handleSubmit = async () => {
-    if (!emailFromQuery) {
-      setStatus({ kind: "error", message: "Missing email. Please return to registration and try again." });
-      return;
-    }
-
     if (!isSixDigits(code)) {
       setStatus({ kind: "error", message: "Please enter the 6-digit code." });
       return;
@@ -126,16 +133,16 @@ export default function VerifyPage() {
     setStatus({ kind: "idle", message: "" });
 
     try {
-      await apiPostJson<{ message: string; email: string }>("/api/auth/verify", {
+      await apiPostJson("/api/auth/verify", {
         email: emailFromQuery,
         code,
       });
-
       setStatus({ kind: "success", message: "Email verified successfully." });
-      // Avoid delayed redirects during HMR/unmount; push immediately.
-      router.push("/login");
+      const destination = role === "freelancer" ? "/freelancer-details" : "/client-details";
+      router.push(destination);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Verification failed. Please try again.";
+      const message =
+        err instanceof ApiError ? err.message : "Verification failed. Please try again.";
       setStatus({ kind: "error", message });
     } finally {
       setIsSubmitting(false);
@@ -143,25 +150,21 @@ export default function VerifyPage() {
   };
 
   const handleResend = async () => {
-    if (!emailFromQuery) return;
     if (!canResend) return;
 
     setIsResending(true);
     setStatus({ kind: "idle", message: "" });
 
     try {
-      await apiPostJson<{ message: string; email: string }>("/api/auth/resend", {
-        email: emailFromQuery,
-      });
-
+      await apiPostJson("/api/auth/resend", { email: emailFromQuery });
       setDigits(Array.from({ length: 6 }, () => ""));
       setStatus({ kind: "success", message: "A new verification code was sent." });
-      // Cooldown to prevent spam/resend loops.
       setResendCooldown(30);
       setTimeout(() => setResendCooldown(0), 30000);
       focusIndex(0);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not resend the code. Please try again.";
+      const message =
+        err instanceof ApiError ? err.message : "Could not resend the code. Please try again.";
       setStatus({ kind: "error", message });
     } finally {
       setIsResending(false);
@@ -173,7 +176,7 @@ export default function VerifyPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10">
         <div className="ui-page-enter ui-surface flex w-full max-w-xl flex-col items-center justify-center rounded-full bg-white/90 px-6 py-4 shadow-[0_16px_60px_rgba(0,0,0,0.08)]">
           <div className="flex items-center gap-4">
-            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="rounded-3xl" />
+            <Image src="/logo.png" alt="PeerMatch logo" width={56} height={56} className="object-contain" />
             <div className="mt-0 text-center sm:text-left">
               <p className="text-lg font-semibold text-[#0F172A]">PeerMatch</p>
               <p className="text-sm text-zinc-500">Student Collaboration</p>
@@ -237,8 +240,8 @@ export default function VerifyPage() {
               {isResending
                 ? "Resending..."
                 : resendCooldown > 0
-                  ? `Resend code (in ${resendCooldown}s)`
-                  : "Resend code"}
+                ? `Resend code (in ${resendCooldown}s)`
+                : "Resend code"}
             </button>
           </div>
         </div>
@@ -246,4 +249,3 @@ export default function VerifyPage() {
     </div>
   );
 }
-
