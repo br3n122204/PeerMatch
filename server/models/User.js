@@ -9,8 +9,16 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
-  // Role options exposed in the frontend registration flow.
-  role: { type: String, enum: ['user', 'admin', 'client', 'freelancer'], default: 'user' },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user',
+  },
+  /** Set from public signup when users choose client vs freelancer (role remains `user`). */
+  accountType: {
+    type: String,
+    enum: ['client', 'freelancer'],
+  },
   verified: { type: Boolean, default: false },
   verification: { type: verificationSchema },
   createdAt: { type: Date, default: Date.now },
