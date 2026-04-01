@@ -40,9 +40,9 @@ export default function ClientDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#D8F3E9] px-4 py-10">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-        <div className="rounded-[2rem] bg-white px-6 py-5 shadow-sm shadow-slate-200">
+    <div className="min-h-screen bg-[#D8F3E9] px-0 py-0">
+      <div className="flex w-full flex-col gap-8">
+        <div className="w-full rounded-[2rem] bg-white px-6 py-8 shadow-sm shadow-slate-200">
           <div className="mx-auto flex w-full max-w-[1120px] flex-col items-center justify-center gap-4 sm:flex-row sm:justify-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-[1.75rem] bg-[#DEF7EC] shadow-sm">
               <Image src="/logo.png" alt="PeerMatch logo" width={36} height={36} className="h-10 w-10 object-contain" />
@@ -83,7 +83,6 @@ export default function ClientDetailsPage() {
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <p className="text-sm font-semibold text-slate-700">Client profile</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
