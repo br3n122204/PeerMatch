@@ -1,12 +1,14 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Button from "../components/Button";
 
 const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduate"];
 
 export default function ClientDetailsPage() {
+  const router = useRouter();
   const [course, setCourse] = useState("");
   const [yearLevel, setYearLevel] = useState(yearLevels[0]);
   const [aboutMe, setAboutMe] = useState("");
@@ -37,6 +39,7 @@ export default function ClientDetailsPage() {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     console.log("Client details submitted:", { course, yearLevel, aboutMe });
+    router.push("/client-home");
   };
 
   return (

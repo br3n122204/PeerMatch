@@ -3,25 +3,53 @@
 import Image from "next/image";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { apiPostJson, ApiError } from "../lib/api";
+
+type LoginResponse = {
+  id: string;
+  name: string;
+  email: string;
+  role: "user" | "admin" | "client" | "freelancer";
+};
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email || !password) {
       setStatusMessage("Please enter both email and password.");
       return;
     }
 
+    setIsSubmitting(true);
     setStatusMessage("Signing in...");
 
-    // TODO: replace this with your real authentication logic
-    setTimeout(() => {
-      setStatusMessage(`Signed in as ${email}.`);
-    }, 500);
+    try {
+      const user = await apiPostJson<LoginResponse>("/api/auth/login", {
+        email: email.trim(),
+        password,
+      });
+
+      if (user.role === "freelancer") {
+        router.push("/freelancer-details");
+        return;
+      }
+
+      router.push("/client-home");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Login failed. Please try again.";
+      setStatusMessage(message);
+      if (err instanceof ApiError && err.status === 403 && message.toLowerCase().includes("verify")) {
+        router.push(`/verify?email=${encodeURIComponent(email.trim())}`);
+      }
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,9 +124,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              disabled={isSubmitting}
               className="ui-interactive w-full rounded-3xl bg-[#FA642C] py-4 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5"
             >
-              Continue
+              {isSubmitting ? "Signing in..." : "Continue"}
             </button>
           </form>
 
