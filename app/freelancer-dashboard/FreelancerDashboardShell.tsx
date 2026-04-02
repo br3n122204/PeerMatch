@@ -80,7 +80,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+      <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4]">
         <p className="text-sm text-zinc-500">Loading…</p>
       </div>
     );
@@ -88,7 +88,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#F0F7F4] px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#E5F6F4] px-4">
         <p className="text-sm text-zinc-600">We couldn&apos;t load your session.</p>
         <button
           type="button"
@@ -103,7 +103,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   if (clientUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+      <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4]">
         <p className="text-sm text-zinc-500">Redirecting…</p>
       </div>
     );
@@ -111,7 +111,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   return (
     <FreelancerUserContext.Provider value={value}>
-      <div className="min-h-screen bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="min-h-screen bg-[#E5F6F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <div className="min-h-0 lg:row-span-1">
             <FreelancerSidebar />
