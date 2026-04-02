@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { apiGetJson, apiPatchJson, ApiError } from '../api'
 import { formatRelativeTime } from '../lib/formatTime'
 import type { AdminOutletContext, AdminTaskRow } from '../types/admin'
 
-type Tab = 'all' | 'pending' | 'flagged' | 'approved'
+type TaskRouteTab = 'pending' | 'flagged' | 'approved'
 
 type RowStatus = 'Pending' | 'Approved' | 'Rejected'
 
@@ -55,11 +55,10 @@ function IconFlag() {
   )
 }
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'pending', label: 'Pending' },
-  { id: 'flagged', label: 'Flagged' },
-  { id: 'approved', label: 'Approved' },
+const tabs: { id: TaskRouteTab; label: string; url: string }[] = [
+  { id: 'pending', label: 'Pending', url: '/tasks/pending' },
+  { id: 'flagged', label: 'Flagged', url: '/tasks/flagged' },
+  { id: 'approved', label: 'Approved', url: '/tasks/approved' },
 ]
 
 function apiToRow(t: AdminTaskRow): TaskRow {
@@ -77,17 +76,26 @@ function apiToRow(t: AdminTaskRow): TaskRow {
   }
 }
 
-function filterRows(list: TaskRow[], t: Tab): TaskRow[] {
-  if (t === 'all') return list
+function filterRows(list: TaskRow[], t: TaskRouteTab): TaskRow[] {
   if (t === 'pending') return list.filter((r) => r.status === 'Pending')
-  if (t === 'flagged') return list.filter((r) => r.flagged)
+  // Flagged entries should be those needing review (pending + flagged).
+  if (t === 'flagged') return list.filter((r) => r.flagged && r.status === 'Pending')
   if (t === 'approved') return list.filter((r) => r.status === 'Approved')
   return list
 }
 
 export default function TaskModerationPage() {
   const { reloadStats } = useOutletContext<AdminOutletContext>()
-  const [tab, setTab] = useState<Tab>('all')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const path = location.pathname.toLowerCase()
+
+  const tab: TaskRouteTab = path.endsWith('/tasks/flagged')
+    ? 'flagged'
+    : path.endsWith('/tasks/approved')
+      ? 'approved'
+      : 'pending'
+
   const [rows, setRows] = useState<TaskRow[]>([])
   const [pendingTotal, setPendingTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -153,7 +161,7 @@ export default function TaskModerationPage() {
             role="tab"
             aria-selected={tab === t.id}
             className={`admin-tabs__btn${tab === t.id ? ' admin-tabs__btn--active' : ''}`}
-            onClick={() => setTab(t.id)}
+            onClick={() => navigate(t.url)}
           >
             {t.label}
           </button>

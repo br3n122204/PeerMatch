@@ -149,7 +149,7 @@ export default function AdminLayout() {
             <IconDashboard className="admin-nav__icon" />
             Dashboard
           </NavLink>
-          <NavLink to="/tasks" className={navClass}>
+          <NavLink to="/tasks/pending" className={navClass}>
             <IconTasks className="admin-nav__icon" />
             Task Moderation
           </NavLink>
