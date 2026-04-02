@@ -5,6 +5,11 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+import {
+  normalizeAuthUser,
+  persistFreelancerFromMe,
+  recordFreelancerLoginForGreeting,
+} from "../lib/freelancerStorage";
 
 type LoginResponse = {
   user: { id: string; name: string; email: string; role: string; accountType?: string };
@@ -39,6 +44,7 @@ export default function LoginPage() {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("peermatch_role", data.user.role);
       }
+      persistFreelancerFromMe(normalizeAuthUser(data.user));
       const roleFromLogin = String(data.user?.role || "").toLowerCase();
       const accountTypeFromLogin = String(data.user?.accountType || "").toLowerCase();
       if (accountTypeFromLogin === "client" || roleFromLogin === "client") {
@@ -46,15 +52,24 @@ export default function LoginPage() {
         return;
       }
 
-      // Fallback for older API responses that don't include accountType.
+      let freelancerId = normalizeAuthUser(data.user).id;
+      // Confirm role when the login payload omits accountType (older API responses).
       try {
         const me = await apiGetJson<MeResponse>("/api/auth/me");
+        const meUser = normalizeAuthUser(me.user);
+        persistFreelancerFromMe(meUser);
+        freelancerId = meUser.id || freelancerId;
         const role = String(me.user?.role || "").toLowerCase();
         const accountType = String(me.user?.accountType || "").toLowerCase();
-        router.push(accountType === "client" || role === "client" ? "/client-home" : "/");
+        if (accountType === "client" || role === "client") {
+          router.push("/client-home");
+          return;
+        }
       } catch {
-        router.push("/");
+        // Session may still be valid from login; dashboard will re-fetch /api/auth/me.
       }
+      recordFreelancerLoginForGreeting(freelancerId);
+      router.push("/freelancer-dashboard");
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Login failed. Please try again.";
       setStatusMessage(message);

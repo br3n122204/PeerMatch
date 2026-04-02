@@ -110,7 +110,7 @@ export default function FreelancerDetailsPage() {
         });
         setShowConfirmation(true);
         window.setTimeout(() => {
-          router.push("/client-home");
+          router.push("/freelancer-dashboard");
         }, 1600);
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Could not save profile. Please try again.";
