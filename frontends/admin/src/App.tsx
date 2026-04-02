@@ -23,7 +23,11 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<AdminDashboardPage />} />
-              <Route path="/tasks" element={<TaskModerationPage />} />
+              <Route path="/tasks" element={<Navigate to="/tasks/pending" replace />} />
+              <Route path="/tasks/pending" element={<TaskModerationPage />} />
+              <Route path="/tasks/flagged" element={<TaskModerationPage />} />
+              <Route path="/tasks/approved" element={<TaskModerationPage />} />
+              <Route path="/tasks/*" element={<Navigate to="/tasks/pending" replace />} />
               <Route path="/usermanagement/*" element={<UserManagementPage />} />
               <Route
                 path="/users"
