@@ -30,6 +30,11 @@ export function FreelancerSidebar() {
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  const handleNavHover = (href: string) => {
+    if (isActive(href)) return;
+    router.push(href);
+  };
+
   const handleLogout = async () => {
     try {
       await apiPostJson("/api/auth/logout", {});
@@ -57,6 +62,7 @@ export function FreelancerSidebar() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
+              onMouseEnter={() => handleNavHover(item.href)}
               className={`${navItemClass} ${active ? navActiveClass : ""}`}
             >
               {item.icon}
