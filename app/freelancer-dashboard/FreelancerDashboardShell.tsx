@@ -1,0 +1,127 @@
+"use client";
+
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FreelancerSidebar } from "@/app/components/freelancer/FreelancerSidebar";
+import { FreelancerRightAside } from "@/app/components/freelancer/FreelancerRightAside";
+import { apiGetJson, ApiError } from "@/app/lib/api";
+import { normalizeAuthUser, persistFreelancerFromMe } from "@/app/lib/freelancerStorage";
+
+type MeUser = { id: string; name: string; email: string; role: string; accountType?: string };
+
+type MeResponse = { user: MeUser };
+
+type FreelancerUserContextValue = {
+  user: MeUser | null;
+  loading: boolean;
+};
+
+const FreelancerUserContext = createContext<FreelancerUserContextValue | null>(null);
+
+export function useFreelancerDashboardUser() {
+  const ctx = useContext(FreelancerUserContext);
+  if (!ctx) {
+    throw new Error("useFreelancerDashboardUser must be used within FreelancerDashboardShell");
+  }
+  return ctx;
+}
+
+function isClientUser(user: MeUser | null): boolean {
+  if (!user) return false;
+  const role = String(user.role || "").toLowerCase();
+  const accountType = String(user.accountType || "").toLowerCase();
+  return accountType === "client" || role === "client";
+}
+
+export function FreelancerDashboardShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [user, setUser] = useState<MeUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await apiGetJson<MeResponse>("/api/auth/me");
+        if (cancelled) return;
+        const raw = me.user as Record<string, unknown>;
+        const base = normalizeAuthUser(me.user);
+        const nextUser: MeUser = {
+          ...base,
+          role: typeof raw.role === "string" ? raw.role : "",
+          ...(typeof raw.accountType === "string" ? { accountType: raw.accountType } : {}),
+        };
+        persistFreelancerFromMe(base);
+        setUser(nextUser);
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          router.push("/login");
+          return;
+        }
+        setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const clientUser = isClientUser(user);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    if (clientUser) router.replace("/client-home");
+  }, [user, loading, clientUser, router]);
+
+  const value = useMemo(() => ({ user, loading }), [user, loading]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+        <p className="text-sm text-zinc-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#F0F7F4] px-4">
+        <p className="text-sm text-zinc-600">We couldn&apos;t load your session.</p>
+        <button
+          type="button"
+          onClick={() => router.push("/login")}
+          className="rounded-xl bg-[#FF6B35] px-5 py-2.5 text-sm font-semibold text-white transition-[background-color] duration-300 ease-in-out hover:bg-[#e85f2c]"
+        >
+          Go to login
+        </button>
+      </div>
+    );
+  }
+
+  if (clientUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+        <p className="text-sm text-zinc-500">Redirecting…</p>
+      </div>
+    );
+  }
+
+  return (
+    <FreelancerUserContext.Provider value={value}>
+      <div className="min-h-screen bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <div className="min-h-0 lg:row-span-1">
+            <FreelancerSidebar />
+          </div>
+          <div className="min-h-0">{children}</div>
+          <div className="min-h-0 lg:row-span-1">
+            <FreelancerRightAside />
+          </div>
+        </div>
+      </div>
+    </FreelancerUserContext.Provider>
+  );
+}
