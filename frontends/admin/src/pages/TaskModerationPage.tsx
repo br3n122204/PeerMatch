@@ -1,0 +1,273 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
+import { apiGetJson, apiPatchJson, ApiError } from '../api'
+import { formatRelativeTime } from '../lib/formatTime'
+import type { AdminOutletContext, AdminTaskRow } from '../types/admin'
+
+type Tab = 'all' | 'pending' | 'flagged' | 'approved'
+
+type RowStatus = 'Pending' | 'Approved' | 'Rejected'
+
+type TaskRow = {
+  id: string
+  title: string
+  ago: string
+  flagged?: boolean
+  client: string
+  budget: number
+  category: 'Academic' | 'Non-Academic'
+  status: RowStatus
+}
+
+function IconEye() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7zM12 15a3 3 0 100-6 3 3 0 000 6z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+    </svg>
+  )
+}
+
+function IconCheck() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconX() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconFlag() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  )
+}
+
+const tabs: { id: Tab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'flagged', label: 'Flagged' },
+  { id: 'approved', label: 'Approved' },
+]
+
+function apiToRow(t: AdminTaskRow): TaskRow {
+  const status: RowStatus =
+    t.status === 'pending' ? 'Pending' : t.status === 'approved' ? 'Approved' : 'Rejected'
+  return {
+    id: t.id,
+    title: t.title,
+    ago: t.createdAt ? formatRelativeTime(t.createdAt) : '—',
+    flagged: t.flagged,
+    client: t.clientName,
+    budget: t.budget,
+    category: t.category === 'academic' ? 'Academic' : 'Non-Academic',
+    status,
+  }
+}
+
+function filterRows(list: TaskRow[], t: Tab): TaskRow[] {
+  if (t === 'all') return list
+  if (t === 'pending') return list.filter((r) => r.status === 'Pending')
+  if (t === 'flagged') return list.filter((r) => r.flagged)
+  if (t === 'approved') return list.filter((r) => r.status === 'Approved')
+  return list
+}
+
+export default function TaskModerationPage() {
+  const { reloadStats } = useOutletContext<AdminOutletContext>()
+  const [tab, setTab] = useState<Tab>('all')
+  const [rows, setRows] = useState<TaskRow[]>([])
+  const [pendingTotal, setPendingTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const loadTasks = useCallback(async () => {
+    setError(null)
+    try {
+      const data = await apiGetJson<{ tasks: AdminTaskRow[]; pendingTotal: number }>('/api/admin/tasks')
+      setRows((data.tasks || []).map(apiToRow))
+      setPendingTotal(data.pendingTotal ?? 0)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Failed to load tasks.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadTasks()
+  }, [loadTasks])
+
+  const visible = useMemo(() => filterRows(rows, tab), [rows, tab])
+
+  const setStatus = async (id: string, status: 'approved' | 'rejected') => {
+    setBusyId(id)
+    setError(null)
+    try {
+      await apiPatchJson<{ task: AdminTaskRow }>(`/api/admin/tasks/${id}`, { status })
+      await loadTasks()
+      await reloadStats()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Update failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <>
+      <div className="admin-page-head">
+        <div>
+          <h1 className="admin-page-title">Task Moderation</h1>
+          <p className="admin-page-sub">Review and approve tasks before publication</p>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="admin-inline-error" role="alert">
+          {error}{' '}
+          <button type="button" className="admin-link-btn" onClick={() => void loadTasks()}>
+            Retry
+          </button>
+        </p>
+      ) : null}
+
+      <div className="admin-tabs" role="tablist" aria-label="Task filters">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`admin-tabs__btn${tab === t.id ? ' admin-tabs__btn--active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="admin-table-card">
+        <div className="admin-table-scroll">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Task Title</th>
+                <th>Client</th>
+                <th>Budget</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6}>
+                    <p className="admin-empty" style={{ margin: '1rem' }}>
+                      Loading tasks…
+                    </p>
+                  </td>
+                </tr>
+              ) : visible.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <p className="admin-empty" style={{ margin: '1rem' }}>
+                      No tasks in this view.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                visible.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <div className="admin-task-cell">
+                        <span className="admin-task-cell__title">{r.title}</span>
+                        <span className="admin-task-cell__ago">{r.ago}</span>
+                        {r.flagged ? (
+                          <span className="admin-flag-badge">
+                            <IconFlag /> Flagged for Review
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>{r.client}</td>
+                    <td>
+                      <span className="admin-budget">₱{r.budget.toLocaleString()}</span>
+                    </td>
+                    <td>
+                      <span
+                        className={`admin-pill admin-pill--cat-${r.category === 'Academic' ? 'academic' : 'non'}`}
+                      >
+                        {r.category}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`admin-pill admin-pill--status-${r.status.toLowerCase()}`}>{r.status}</span>
+                    </td>
+                    <td>
+                      <div className="admin-row-actions">
+                        <button type="button" className="admin-row-icon" aria-label={`View ${r.title}`}>
+                          <IconEye />
+                        </button>
+                        {r.status === 'Pending' ? (
+                          <>
+                            <button
+                              type="button"
+                              className="admin-row-icon admin-row-icon--ok"
+                              aria-label="Approve"
+                              disabled={busyId === r.id}
+                              onClick={() => void setStatus(r.id, 'approved')}
+                            >
+                              <IconCheck />
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-row-icon admin-row-icon--no"
+                              aria-label="Reject"
+                              disabled={busyId === r.id}
+                              onClick={() => void setStatus(r.id, 'rejected')}
+                            >
+                              <IconX />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="admin-table-footer">
+          <p className="admin-table-footer__status">
+            Showing {visible.length} task{visible.length === 1 ? '' : 's'}
+            {tab === 'pending' ? ` · ${pendingTotal.toLocaleString()} pending overall` : ''}
+          </p>
+          <div className="admin-table-footer__pager">
+            <button type="button" className="admin-pager-btn admin-pager-btn--ghost" disabled>
+              Previous
+            </button>
+            <button type="button" className="admin-pager-btn admin-pager-btn--primary" disabled>
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}

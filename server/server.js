@@ -9,7 +9,8 @@ const adminRoutes = require('./routes/admin');
 
 dotenv.config();
 
-const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5174';
+const rawOrigins =
+  process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:5174';
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 const app = express();
