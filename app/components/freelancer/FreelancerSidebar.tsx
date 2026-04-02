@@ -9,7 +9,7 @@ import { apiPostJson } from "@/app/lib/api";
 import { clearFreelancerGreetingSession } from "@/app/lib/freelancerStorage";
 
 const navItemClass =
-  "flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-medium text-zinc-900 transition-[background-color,color] duration-300 ease-in-out hover:bg-[#FF6B35] hover:text-white";
+  "flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-medium text-zinc-900 transition-[background-color,color,box-shadow] duration-300 ease-in-out hover:bg-white/80 hover:shadow-sm";
 const navActiveClass = "bg-[#FF6B35] text-white shadow-sm";
 
 type NavItem = { href: string; label: string; icon: ReactNode };
@@ -28,11 +28,6 @@ export function FreelancerSidebar() {
   const isActive = (href: string) => {
     if (href === "/freelancer-dashboard") return pathname === "/freelancer-dashboard";
     return pathname === href || pathname.startsWith(`${href}/`);
-  };
-
-  const handleNavHover = (href: string) => {
-    if (isActive(href)) return;
-    router.push(href);
   };
 
   const handleLogout = async () => {
@@ -62,7 +57,6 @@ export function FreelancerSidebar() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              onMouseEnter={() => handleNavHover(item.href)}
               className={`${navItemClass} ${active ? navActiveClass : ""}`}
             >
               {item.icon}
