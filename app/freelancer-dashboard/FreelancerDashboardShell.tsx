@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { FreelancerSidebar } from "@/app/components/freelancer/FreelancerSidebar";
 import { FreelancerRightAside } from "@/app/components/freelancer/FreelancerRightAside";
 import { apiGetJson, ApiError } from "@/app/lib/api";
@@ -35,8 +35,10 @@ function isClientUser(user: MeUser | null): boolean {
 
 export function FreelancerDashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRouteContentVisible, setIsRouteContentVisible] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +77,14 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
     if (!user || loading) return;
     if (clientUser) router.replace("/client-home");
   }, [user, loading, clientUser, router]);
+
+  useEffect(() => {
+    setIsRouteContentVisible(false);
+    const timeoutId = window.setTimeout(() => {
+      setIsRouteContentVisible(true);
+    }, 90);
+    return () => window.clearTimeout(timeoutId);
+  }, [pathname]);
 
   const value = useMemo(() => ({ user, loading }), [user, loading]);
 
@@ -116,7 +126,13 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
           <div className="min-h-0 lg:row-span-1">
             <FreelancerSidebar />
           </div>
-          <div className="min-h-0">{children}</div>
+          <div
+            className={`min-h-0 transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
+              isRouteContentVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.995] opacity-0"
+            }`}
+          >
+            {children}
+          </div>
           <div className="min-h-0 lg:row-span-1">
             <FreelancerRightAside />
           </div>
