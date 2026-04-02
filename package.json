@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run dev:clean && concurrently \"npm run dev:next\" \"npm run dev:server\"",
+    "dev": "npm run dev:clean && concurrently --names \"PeerMatch Main Web,PeerMatch Main API\" --prefix-colors \"#0069A8,#FA642C\" \"npm run dev:next\" \"npm run dev:server\"",
     "dev:clean": "npx kill-port 3000 5000 5174",
-    "dev:next": "next dev",
-    "dev:server": "nodemon server/server.js",
+    "dev:next": "node --title=\"PeerMatch Main\" node_modules/next/dist/bin/next dev",
+    "dev:server": "nodemon --exec \"node --title=\\\"PeerMatch Main\\\"\" server/devMainApi.js",
     "dev:admin": "npm run dev --prefix frontends/admin",
     "build": "next build",
     "start": "next start",
     "start:server": "node server/server.js",
     "seed:admin": "node server/seedAdmin.js",
+    "seed:tasks": "node server/seedTasks.js",
     "lint": "eslint"
   },
   "dependencies": {

@@ -27,6 +27,8 @@ const userSchema = new mongoose.Schema({
   profileCompleted: { type: Boolean, default: false },
   verified: { type: Boolean, default: false },
   verification: { type: verificationSchema },
+  /** When true, user cannot use the platform (admin UI shows Suspended). */
+  suspended: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

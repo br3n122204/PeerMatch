@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async () => {
     try {
-      const { user: next } = await apiGetJson<MeResponse>('/api/auth/me')
+      const { user: next } = await apiGetJson<MeResponse>('/api/admin/auth/me')
       setUser(next)
       setStatus('authenticated')
       persistRole(next.role)
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession])
 
   const login = useCallback(async (email: string, password: string) => {
-    await apiPostJson<{ user: AuthUser }>('/api/auth/login', { email, password })
-    const { user: next } = await apiGetJson<MeResponse>('/api/auth/me')
+    await apiPostJson<{ user: AuthUser }>('/api/admin/auth/login', { email, password })
+    const { user: next } = await apiGetJson<MeResponse>('/api/admin/auth/me')
     setUser(next)
     setStatus('authenticated')
     persistRole(next.role)
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await apiSend('/api/auth/logout', 'POST')
+      await apiSend('/api/admin/auth/logout', 'POST')
     } catch {
       /* cookie cleared server-side or network error */
     }

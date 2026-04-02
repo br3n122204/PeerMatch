@@ -84,6 +84,35 @@ export async function apiGetJson<TResponse>(
   return payload as TResponse
 }
 
+export async function apiPatchJson<TResponse>(
+  path: string,
+  body: unknown,
+  init?: Omit<RequestInit, 'method' | 'body' | 'headers'>,
+): Promise<TResponse> {
+  const url = `${apiBase()}${path.startsWith('/') ? path : `/${path}`}`
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'include',
+      ...init,
+    })
+  } catch {
+    throw new ApiError('Cannot reach the API. Is the backend running?', 0)
+  }
+  const payload = await parseJsonResponse(res)
+  if (!res.ok) {
+    const message =
+      typeof (payload as { message?: string } | undefined)?.message === 'string'
+        ? (payload as { message: string }).message
+        : 'Request failed.'
+    throw new ApiError(message, res.status, payload)
+  }
+  return payload as TResponse
+}
+
 export async function apiSend(
   path: string,
   method: 'POST',
