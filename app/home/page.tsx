@@ -6,43 +6,47 @@ export const metadata = {
 
 export default function PeerMatchHome() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-10 dark:bg-black">
-      <div className="ui-page-enter ui-surface w-full max-w-3xl rounded-[2rem] border border-zinc-200 bg-white p-10 shadow-xl shadow-zinc-200/40 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-black/20">
-        <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+    <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4] px-4 py-10">
+      <div className="ui-page-enter ui-surface w-full max-w-5xl rounded-[2.25rem] border border-zinc-200 bg-white p-10 shadow-xl shadow-zinc-200/40">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:justify-items-center">
           <div>
-            <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-              Welcome to PeerMatch
+            <span className="inline-flex rounded-full bg-blue-100 px-4 py-1 text-xs font-semibold text-blue-800">
+              PeerMatch
             </span>
-            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-5xl">
-              Log in or register to continue.
+            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">
+              Request help.
+              <br />
+              Offer assistance.
             </h1>
-            <p className="mt-4 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Use the links below to access the login and registration pages. The forms include validation and a clean responsive layout.
+            <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-600">
+              A structured platform exclusively for CIT-U students to request and offer assistance for academic
+              and non-academic tasks. Choose your role as a Client to post tasks and set compensation in Philippine
+              Peso (PHP), or as a freelancer to offer your services.
             </p>
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/login"
-                className="ui-interactive inline-flex items-center justify-center rounded-2xl bg-zinc-950 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-100 motion-safe:hover:-translate-y-0.5"
+                className="ui-interactive inline-flex items-center justify-center rounded-2xl bg-[#FA642C] px-6 py-3 text-sm font-semibold text-white hover:bg-[#df531f] motion-safe:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Log in
               </Link>
               <Link
                 href="/register"
-                className="ui-interactive inline-flex items-center justify-center rounded-2xl border border-zinc-300 px-6 py-3 text-sm font-semibold text-zinc-950 hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-900 motion-safe:hover:-translate-y-0.5"
+                className="ui-interactive inline-flex items-center justify-center rounded-2xl border border-zinc-300 bg-white px-6 py-3 text-sm font-semibold text-zinc-950 hover:border-zinc-400 hover:bg-zinc-50 motion-safe:hover:-translate-y-0.5"
               >
                 Register
               </Link>
             </div>
           </div>
 
-          <div className="ui-surface rounded-[1.75rem] bg-gradient-to-br from-blue-600 to-violet-600 p-8 text-white shadow-2xl shadow-blue-600/20">
-            <h2 className="text-2xl font-semibold">Why create an account?</h2>
-            <ul className="mt-6 space-y-4 text-sm leading-7">
-              <li>• Save your preferences and profile details</li>
-              <li>• Connect with peers faster</li>
-              <li>• Access project matching features</li>
+          <aside className="rounded-[1.75rem] bg-[#0069A8] p-7 text-white shadow-xl shadow-blue-900/10">
+            <h2 className="text-xl font-semibold">Get started today</h2>
+            <ul className="mt-5 space-y-3 pl-5 text-sm leading-6 text-white/95 list-disc">
+              <li>Post tasks or offer your services</li>
+              <li>Build accountability with verified peers</li>
+              <li>Earn or get support transparently</li>
             </ul>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
