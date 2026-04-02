@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 const COOKIE_NAME = process.env.JWT_COOKIE_NAME || 'peermatch_token';
+const ADMIN_COOKIE_NAME = process.env.ADMIN_JWT_COOKIE_NAME || 'peermatch_admin_token';
 
 function getJwtSecret() {
   const secret =
@@ -42,9 +43,30 @@ function attachAccessTokenCookie(res, token) {
   res.cookie(COOKIE_NAME, token, getCookieBaseOptions());
 }
 
+function getCookieNameForReq(req) {
+  const originalUrl = String(req?.originalUrl || req?.url || '');
+  return originalUrl.startsWith('/api/admin') ? ADMIN_COOKIE_NAME : COOKIE_NAME;
+}
+
+function attachAccessTokenCookieForReq(req, res, token) {
+  const cookieName = getCookieNameForReq(req);
+  res.cookie(cookieName, token, getCookieBaseOptions());
+}
+
 function clearAccessTokenCookie(res) {
   const base = getCookieBaseOptions();
   res.clearCookie(COOKIE_NAME, {
+    path: base.path,
+    domain: base.domain,
+    sameSite: base.sameSite,
+    secure: base.secure,
+  });
+}
+
+function clearAccessTokenCookieForReq(req, res) {
+  const cookieName = getCookieNameForReq(req);
+  const base = getCookieBaseOptions();
+  res.clearCookie(cookieName, {
     path: base.path,
     domain: base.domain,
     sameSite: base.sameSite,
@@ -62,7 +84,8 @@ function signAccessToken(user) {
 }
 
 function extractToken(req) {
-  const fromCookie = req.cookies?.[COOKIE_NAME];
+  const cookieName = getCookieNameForReq(req);
+  const fromCookie = req.cookies?.[cookieName];
   if (fromCookie) return fromCookie;
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) return auth.slice(7).trim();
@@ -99,10 +122,13 @@ function requireAdmin(req, res, next) {
 
 module.exports = {
   COOKIE_NAME,
+  ADMIN_COOKIE_NAME,
   authMiddleware,
   requireAdmin,
   signAccessToken,
   attachAccessTokenCookie,
+  attachAccessTokenCookieForReq,
   clearAccessTokenCookie,
+  clearAccessTokenCookieForReq,
   extractToken,
 };

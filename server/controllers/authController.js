@@ -2,8 +2,8 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const {
   signAccessToken,
-  attachAccessTokenCookie,
-  clearAccessTokenCookie,
+  attachAccessTokenCookieForReq,
+  clearAccessTokenCookieForReq,
 } = require('../middleware/auth');
 
 function normalizeEmail(email) {
@@ -37,7 +37,7 @@ async function login(req, res) {
     }
 
     const token = signAccessToken(user);
-    attachAccessTokenCookie(res, token);
+    attachAccessTokenCookieForReq(req, res, token);
 
     return res.json({
       user: {
@@ -54,8 +54,8 @@ async function login(req, res) {
   }
 }
 
-function logout(_req, res) {
-  clearAccessTokenCookie(res);
+function logout(req, res) {
+  clearAccessTokenCookieForReq(req, res);
   return res.status(204).send();
 }
 
@@ -64,7 +64,7 @@ async function getMe(req, res) {
   try {
     const user = await User.findById(req.user.userId).select('name email role verified accountType');
     if (!user) {
-      clearAccessTokenCookie(res);
+      clearAccessTokenCookieForReq(req, res);
       return res.status(401).json({ message: 'Account not found.' });
     }
     return res.json({

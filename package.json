@@ -12,6 +12,7 @@
     "start": "next start",
     "start:server": "node server/server.js",
     "seed:admin": "node server/seedAdmin.js",
+    "seed:tasks": "node server/seedTasks.js",
     "lint": "eslint"
   },
   "dependencies": {
