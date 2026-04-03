@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, LogOut, MessageCircle, Search, User } from "lucide-react";
 import { apiPostJson } from "@/app/lib/api";
+import { disconnectSocket } from "@/app/lib/socket";
 import { clearFreelancerGreetingSession } from "@/app/lib/freelancerStorage";
 
 const navItemClass =
@@ -34,6 +35,7 @@ export function FreelancerSidebar() {
     try {
       await apiPostJson("/api/auth/logout", {});
     } finally {
+      disconnectSocket();
       clearFreelancerGreetingSession();
       router.push("/login");
     }

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -20,18 +20,18 @@ import {
   MessageCircle,
   MessageSquare,
   MessageSquareQuote,
-  Phone,
-  Search,
   Send,
   Star,
   Upload,
   UserCircle,
-  Video,
-  Info,
   User,
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+import { ChatThread } from "../components/chat/ChatThread";
+import { disconnectSocket } from "../lib/socket";
+import { UserSearchDropdown } from "../components/chat/UserSearchDropdown";
+import { ChatLayout } from "../components/chat/ChatLayout";
 
 type PostItem = {
   id: string;
@@ -126,7 +126,7 @@ const navItemClass =
   "flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-medium text-zinc-900 transition-[background-color,color,box-shadow] duration-300 ease-in-out hover:bg-white/80 hover:shadow-sm";
 const navActiveClass = "bg-[#FF6B35] text-white shadow-sm";
 
-export default function ClientHomePage() {
+function ClientHomePageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -143,6 +143,10 @@ export default function ClientHomePage() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileStatusMessage, setProfileStatusMessage] = useState<string>("");
+  const [meUserId, setMeUserId] = useState<string>("");
+  const peerFromQuery = searchParams.get("with") || "";
+  const [peerUserId, setPeerUserId] = useState<string>(peerFromQuery);
+  const [peerSearchText, setPeerSearchText] = useState<string>(peerFromQuery);
   const [savedProfileSnapshot, setSavedProfileSnapshot] = useState<ProfileFormSnapshot | null>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(true);
@@ -162,6 +166,11 @@ export default function ClientHomePage() {
   const postsHeading = "Latest Post By CIT Community";
 
   useEffect(() => {
+    setPeerUserId(peerFromQuery);
+    setPeerSearchText(peerFromQuery);
+  }, [peerFromQuery]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -174,6 +183,9 @@ export default function ClientHomePage() {
           setDisplayName(fullName);
           setDisplayEmail(email);
           setProfileNameInput(fullName);
+          if (me.user?.id) {
+            setMeUserId(String(me.user.id));
+          }
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -195,12 +207,19 @@ export default function ClientHomePage() {
   }, [activePanel]);
 
   useEffect(() => {
+    setPeerUserId(peerFromQuery);
+  }, [peerFromQuery]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const profile = await apiGetJson<{ user: ProfileUser }>("/api/auth/profile");
         if (cancelled) return;
         const user = profile.user;
+        if (user.id) {
+          setMeUserId(String(user.id));
+        }
         setDisplayName(String(user.name || "").trim());
         setDisplayEmail(String(user.email || "").trim());
         setProfileNameInput(String(user.name || "").trim());
@@ -237,6 +256,7 @@ export default function ClientHomePage() {
     try {
       await apiPostJson("/api/auth/logout", {});
     } finally {
+      disconnectSocket();
       router.push("/login");
     }
   };
@@ -501,117 +521,10 @@ export default function ClientHomePage() {
             ) : activePanel === "messages" ? (
               <section
                 aria-labelledby="messages-heading"
-                className="h-full w-full min-h-[700px] overflow-hidden rounded-2xl border border-zinc-200 bg-[#F3F6F5]"
+                className="flex h-full w-full min-h-[700px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-[#F3F6F5]"
               >
-                <div className="grid h-full grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
-                  <aside className="border-b border-zinc-200 bg-white/65 p-4 md:border-b-0 md:border-r">
-                    <h1 id="messages-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-                      Messages
-                    </h1>
-                    <div className="relative mt-3">
-                      <Search
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                        strokeWidth={1.8}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Search conversations..."
-                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      className="mt-4 w-full rounded-xl border border-zinc-200 bg-[#FFF2EB] px-3 py-3 text-left transition hover:bg-[#ffe8db]"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FF6B35] text-xs font-semibold text-white">
-                          AJ
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-sm font-semibold text-zinc-900">Alex Johnson</p>
-                            <p className="text-[11px] text-zinc-500">2m ago</p>
-                          </div>
-                          <p className="truncate text-xs text-zinc-600">Hey! Did you finish the project?</p>
-                        </div>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#4DD2AC] px-4 text-sm font-semibold text-white transition hover:brightness-95"
-                    >
-                      <span className="text-base leading-none">+</span>
-                      <span>New Chat</span>
-                    </button>
-                  </aside>
-
-                  <div className="grid min-h-0 grid-rows-[auto_1fr_auto] bg-white">
-                    <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900">Alex Johnson</p>
-                        <p className="text-xs text-zinc-500">Online</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
-                          <Phone className="h-4 w-4" strokeWidth={1.8} />
-                        </button>
-                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
-                          <Video className="h-4 w-4" strokeWidth={1.8} />
-                        </button>
-                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
-                          <Info className="h-4 w-4" strokeWidth={1.8} />
-                        </button>
-                      </div>
-                    </header>
-
-                    <div className="space-y-3 overflow-y-auto px-4 py-4">
-                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
-                        <p className="text-sm text-zinc-900">Hey! How are you doing?</p>
-                        <p className="mt-1 text-[11px] text-zinc-500">10:30 AM</p>
-                      </div>
-                      <div className="ml-auto max-w-[70%] rounded-2xl rounded-tr-md bg-[#4DD2AC] px-3.5 py-2.5 text-white">
-                        <p className="text-sm">Hi Alex! I&apos;m doing great, thanks for asking!</p>
-                        <p className="mt-1 text-[11px] text-white/80">10:32 AM</p>
-                      </div>
-                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
-                        <p className="text-sm text-zinc-900">Did you finish the project we discussed last week?</p>
-                        <p className="mt-1 text-[11px] text-zinc-500">10:35 AM</p>
-                      </div>
-                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
-                        <p className="text-sm text-zinc-900">I&apos;m almost done with my part of the research.</p>
-                        <p className="mt-1 text-[11px] text-zinc-500">10:36 AM</p>
-                      </div>
-                      <div className="ml-auto max-w-[70%] rounded-2xl rounded-tr-md bg-[#4DD2AC] px-3.5 py-2.5 text-white">
-                        <p className="text-sm">Perfect! I just finished mine too. Should we meet to review everything?</p>
-                        <p className="mt-1 text-[11px] text-white/80">10:38 AM</p>
-                      </div>
-                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
-                        <p className="text-sm text-zinc-900">Absolutely! How about tomorrow at 2 PM in the library?</p>
-                        <p className="mt-1 text-[11px] text-zinc-500">10:40 AM</p>
-                      </div>
-                    </div>
-
-                    <form
-                      onSubmit={(event) => event.preventDefault()}
-                      className="flex items-center gap-2 border-t border-zinc-200 px-4 py-3"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Type your message..."
-                        className="h-10 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
-                      />
-                      <button
-                        type="submit"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95"
-                        aria-label="Send message"
-                      >
-                        <Send className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    </form>
-                  </div>
+                <div className="min-h-0 flex-1 p-0">
+                  <ChatLayout currentUserId={meUserId} initialOtherQuery={peerUserId.trim()} className="h-full" />
                 </div>
               </section>
             ) : activePanel === "profile" ? (
@@ -1031,3 +944,16 @@ export default function ClientHomePage() {
   );
 }
 
+export default function ClientHomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4]">
+          <p className="text-sm text-zinc-500">Loading…</p>
+        </div>
+      }
+    >
+      <ClientHomePageContent />
+    </Suspense>
+  );
+}

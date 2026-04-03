@@ -1,3 +1,4 @@
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -6,6 +7,9 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const messageRoutes = require('./routes/messages');
+const usersRoutes = require('./routes/users');
+const { attachSocketServer } = require('./socket/socketServer');
 
 dotenv.config();
 
@@ -45,10 +49,16 @@ function requireDb(req, res, next) {
 
 app.use('/api/auth', requireDb, authRoutes);
 app.use('/api/admin', requireDb, adminRoutes);
+app.use('/api/messages', requireDb, messageRoutes);
+app.use('/api/users', requireDb, usersRoutes);
 
 app.get('/', (req, res) => res.send('PeerMatch MERN API is running'));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+attachSocketServer(server, { allowedOrigins });
+
+server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });

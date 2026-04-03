@@ -6,6 +6,7 @@ import { FreelancerSidebar } from "@/app/components/freelancer/FreelancerSidebar
 import { FreelancerRightAside } from "@/app/components/freelancer/FreelancerRightAside";
 import { apiGetJson, ApiError } from "@/app/lib/api";
 import { normalizeAuthUser, persistFreelancerFromMe } from "@/app/lib/freelancerStorage";
+import { connectSocket, disconnectSocket } from "@/app/lib/socket";
 
 type MeUser = { id: string; name: string; email: string; role: string; accountType?: string };
 
@@ -70,6 +71,14 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    connectSocket(user.id);
+    return () => {
+      disconnectSocket();
+    };
+  }, [user?.id]);
 
   const clientUser = isClientUser(user);
 
