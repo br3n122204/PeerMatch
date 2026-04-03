@@ -408,7 +408,13 @@ function ClientHomePageContent() {
           </button>
         </aside>
 
-        <main className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white p-6 shadow-[0_4px_32px_rgba(15,23,42,0.04)] sm:p-8 lg:p-10">
+        <main
+          className={`flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white shadow-[0_4px_32px_rgba(15,23,42,0.04)] ${
+            activePanel === "profile" || activePanel === "messages"
+              ? "p-4"
+              : "p-6 sm:p-8 lg:p-10"
+          }`}
+        >
           <div
             className={`flex min-h-0 flex-1 flex-col transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
               isPanelVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.995] opacity-0"
@@ -549,10 +555,14 @@ function ClientHomePageContent() {
             ) : activePanel === "messages" ? (
               <section
                 aria-labelledby="messages-heading"
-                className="flex h-full w-full min-h-[700px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-[#F3F6F5]"
+                className="flex h-full min-h-[560px] w-full flex-1 flex-col"
               >
-                <div className="min-h-0 flex-1 p-0">
-                  <ChatLayout currentUserId={meUserId} initialOtherQuery={peerUserId.trim()} className="h-full" />
+                <div className="min-h-0 flex-1">
+                  <ChatLayout
+                    currentUserId={meUserId}
+                    initialOtherQuery={peerUserId.trim()}
+                    className="!h-full !min-h-[680px] rounded-2xl border border-zinc-200 !bg-white"
+                  />
                 </div>
               </section>
             ) : activePanel === "profile" ? (
@@ -593,7 +603,7 @@ function ClientHomePageContent() {
 
                     <div className="mt-4 space-y-2 border-t border-zinc-200 pt-4 text-xs text-zinc-700">
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
                         <input
                           type="text"
                           value={profileLocationInput}
@@ -603,11 +613,11 @@ function ClientHomePageContent() {
                         />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                        <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
                         <span>Response time: &lt; 1 hour</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Star className="h-3.5 w-3.5 text-zinc-500" />
+                        <Star className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
                         <span>Member since 2026</span>
                       </div>
                     </div>
@@ -629,7 +639,7 @@ function ClientHomePageContent() {
                     </div>
                   </article>
 
-                  <div className="profile-scroll-pane max-h-[calc(100vh-10rem)] min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] scroll-smooth">
+                  <div className="profile-scroll-pane max-h-[calc(100vh-3.5rem)] min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] scroll-smooth">
                     <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
                         <UserCircle className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
