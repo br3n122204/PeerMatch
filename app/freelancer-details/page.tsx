@@ -122,7 +122,7 @@ export default function FreelancerDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#D8F3E9]">
+    <div className="min-h-screen">
       <div className="flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-50 w-full">
           <div className="w-full rounded-b-[2rem] border-b border-slate-200/70 bg-white/95 px-6 py-4 shadow-sm shadow-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/80">

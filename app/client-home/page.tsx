@@ -2,8 +2,35 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bell,
+  CalendarDays,
+  ChevronDown,
+  CirclePlus,
+  Clock,
+  FileText,
+  Handshake,
+  Heart,
+  MapPin,
+  LayoutDashboard,
+  Lightbulb,
+  LogOut,
+  MessageCircle,
+  MessageSquare,
+  MessageSquareQuote,
+  Phone,
+  Search,
+  Send,
+  Star,
+  Upload,
+  UserCircle,
+  Video,
+  Info,
+  User,
+  Users,
+} from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 
 type PostItem = {
@@ -25,9 +52,100 @@ type ActivityItem = {
   avatar: string;
 };
 
+type ProfileUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  accountType?: string;
+  course?: string;
+  yearLevel?: string;
+  aboutMe?: string;
+  skills?: string;
+  location?: string;
+  photoDataUrl?: string;
+};
+
+type ProfileFormSnapshot = {
+  name: string;
+  course: string;
+  yearLevel: string;
+  location: string;
+  aboutMe: string;
+  skills: string;
+  photoDataUrl: string;
+};
+
+const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+const courseOptions = [
+  // Engineering & Architecture
+  "BS Architecture",
+  "BS Chemical Engineering",
+  "BS Civil Engineering",
+  "BS Computer Engineering",
+  "BS Electrical Engineering",
+  "BS Electronics Engineering",
+  "BS Industrial Engineering",
+  "BS Mechanical Engineering",
+  "BS Mining Engineering",
+
+  // Management, Business & Accountancy
+  "BS Accountancy",
+  "BS Accounting Information Systems",
+  "BS Management Accounting",
+  "BS Business Administration",
+  "BS Hospitality Management",
+  "BS Tourism Management",
+  "BS Office Administration",
+  "Bachelor in Public Administration",
+
+  // Arts, Sciences & Education
+  "AB Communication",
+  "AB English with Applied Linguistics",
+  "Bachelor of Elementary Education",
+  "Bachelor of Secondary Education",
+  "Bachelor of Multimedia Arts",
+  "BS Biology",
+  "BS Math with Applied Industrial Mathematics",
+  "BS Psychology",
+
+  // Computer Studies
+  "BS Computer Science",
+  "BS Information Technology",
+
+  // Health & Allied Health Sciences
+  "BS Nursing",
+  "BS Pharmacy",
+  "BS Medical Technology",
+
+  // Criminal Justice
+  "BS Criminology",
+] as const;
+
+const navItemClass =
+  "flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-medium text-zinc-900 transition-[background-color,color,box-shadow] duration-300 ease-in-out hover:bg-white/80 hover:shadow-sm";
+const navActiveClass = "bg-[#FF6B35] text-white shadow-sm";
+
 export default function ClientHomePage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activePanel = searchParams.get("panel");
   const [displayName, setDisplayName] = useState<string>("");
+  const [displayEmail, setDisplayEmail] = useState<string>("");
+  const [profileNameInput, setProfileNameInput] = useState<string>("");
+  const [profileCourseInput, setProfileCourseInput] = useState<string>("");
+  const [profileYearLevelInput, setProfileYearLevelInput] = useState<string>("");
+  const [profileLocationInput, setProfileLocationInput] = useState<string>("");
+  const [profileAboutInput, setProfileAboutInput] = useState<string>("");
+  const [profileSkillsInput, setProfileSkillsInput] = useState<string>("");
+  const [profilePhotoDataUrl, setProfilePhotoDataUrl] = useState<string>("");
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileStatusMessage, setProfileStatusMessage] = useState<string>("");
+  const [savedProfileSnapshot, setSavedProfileSnapshot] = useState<ProfileFormSnapshot | null>(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [isPanelVisible, setIsPanelVisible] = useState(true);
   const posts: PostItem[] = [];
   const recentActivities: ActivityItem[] = [];
   const notifications: string[] = [];
@@ -41,7 +159,7 @@ export default function ClientHomePage() {
   const displayConnections = displayConnectionsRaw;
   const displayHours = displayHoursRaw;
 
-  const postsHeading = posts.length === 0 ? "No latest Post By CIT Community" : "Latest Posts By CIT Community";
+  const postsHeading = "Latest Post By CIT Community";
 
   useEffect(() => {
     let cancelled = false;
@@ -50,14 +168,64 @@ export default function ClientHomePage() {
         const me = await apiGetJson<{ user: { id: string; name: string; email: string; role: string } }>(
           "/api/auth/me",
         );
-        const firstName = String(me.user?.name || "")
-          .trim()
-          .split(/\s+/)[0] || "";
-        if (!cancelled) setDisplayName(firstName);
+        const fullName = String(me.user?.name || "").trim();
+        const email = String(me.user?.email || "").trim();
+        if (!cancelled) {
+          setDisplayName(fullName);
+          setDisplayEmail(email);
+          setProfileNameInput(fullName);
+        }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           router.push("/login");
         }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    setIsPanelVisible(false);
+    const timeoutId = window.setTimeout(() => {
+      setIsPanelVisible(true);
+    }, 90);
+    return () => window.clearTimeout(timeoutId);
+  }, [activePanel]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await apiGetJson<{ user: ProfileUser }>("/api/auth/profile");
+        if (cancelled) return;
+        const user = profile.user;
+        setDisplayName(String(user.name || "").trim());
+        setDisplayEmail(String(user.email || "").trim());
+        setProfileNameInput(String(user.name || "").trim());
+        setProfileCourseInput(String(user.course || "").trim());
+        setProfileYearLevelInput(String(user.yearLevel || "").trim());
+        setProfileLocationInput(String(user.location || "").trim());
+        setProfileAboutInput(String(user.aboutMe || "").trim());
+        setProfileSkillsInput(String(user.skills || "").trim());
+        setProfilePhotoDataUrl(String(user.photoDataUrl || "").trim());
+        setSavedProfileSnapshot({
+          name: String(user.name || "").trim(),
+          course: String(user.course || "").trim(),
+          yearLevel: String(user.yearLevel || "").trim(),
+          location: String(user.location || "").trim(),
+          aboutMe: String(user.aboutMe || "").trim(),
+          skills: String(user.skills || "").trim(),
+          photoDataUrl: String(user.photoDataUrl || "").trim(),
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          router.push("/login");
+          return;
+        }
+      } finally {
+        if (!cancelled) setProfileLoaded(true);
       }
     })();
     return () => {
@@ -72,193 +240,773 @@ export default function ClientHomePage() {
       router.push("/login");
     }
   };
+
+  const featuredWork: Array<{ title: string; category: string; rating: number; reviews: number }> = [];
+  const skillsAndExpertise: string[] = profileSkillsInput
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const recentReviews: Array<{ name: string; timeAgo: string; rating: number; comment: string }> = [];
+  const profileName = profileNameInput || displayName || "Client User";
+  const profileInitials = profileName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "CU";
+
+  const hasUnsavedProfileChanges = useMemo(() => {
+    if (!savedProfileSnapshot || !profileLoaded) return false;
+    const s = savedProfileSnapshot;
+    return (
+      profileNameInput.trim() !== s.name ||
+      profileCourseInput.trim() !== s.course ||
+      profileYearLevelInput.trim() !== s.yearLevel ||
+      profileLocationInput.trim() !== s.location ||
+      profileAboutInput.trim() !== s.aboutMe ||
+      profileSkillsInput.trim() !== s.skills ||
+      profilePhotoDataUrl.trim() !== s.photoDataUrl
+    );
+  }, [
+    savedProfileSnapshot,
+    profileLoaded,
+    profileNameInput,
+    profileCourseInput,
+    profileYearLevelInput,
+    profileLocationInput,
+    profileAboutInput,
+    profileSkillsInput,
+    profilePhotoDataUrl,
+  ]);
+
+  const canSaveProfile = hasUnsavedProfileChanges && profileLoaded && !profileSaving;
+
+  const handleProfilePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfilePhotoDataUrl(String(reader.result || ""));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileLoaded || profileSaving || !hasUnsavedProfileChanges) return;
+    setProfileSaving(true);
+    setProfileStatusMessage("Saving profile...");
+    try {
+      await apiPostJson<{ user: ProfileUser }>("/api/auth/profile", {
+        name: profileNameInput,
+        course: profileCourseInput,
+        yearLevel: profileYearLevelInput,
+        location: profileLocationInput,
+        aboutMe: profileAboutInput,
+        skills: profileSkillsInput,
+        photoDataUrl: profilePhotoDataUrl,
+      });
+      setDisplayName(profileNameInput.trim());
+      setSavedProfileSnapshot({
+        name: profileNameInput.trim(),
+        course: profileCourseInput.trim(),
+        yearLevel: profileYearLevelInput.trim(),
+        location: profileLocationInput.trim(),
+        aboutMe: profileAboutInput.trim(),
+        skills: profileSkillsInput.trim(),
+        photoDataUrl: profilePhotoDataUrl.trim(),
+      });
+      setProfileStatusMessage("Profile saved");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not save profile.";
+      setProfileStatusMessage(message);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const navItems = [
+    { href: "/client-home", label: "Dashboard", icon: <LayoutDashboard className="h-5 w-5 shrink-0" strokeWidth={1.75} /> },
+    {
+      href: "/client-home?panel=create-post",
+      label: "Create Post",
+      icon: <CirclePlus className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+    },
+    {
+      href: "/client-home?panel=messages",
+      label: "Message",
+      icon: <MessageCircle className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+    },
+    { href: "/client-home?panel=profile", label: "Profile", icon: <User className="h-5 w-5 shrink-0" strokeWidth={1.75} /> },
+  ];
+
+  const isNavActive = (href: string) => {
+    if (href === "/client-home") return pathname === "/client-home" && !activePanel;
+    const panel = href.split("panel=")[1];
+    return pathname === "/client-home" && panel === activePanel;
+  };
+
   return (
-    <div className="min-h-screen bg-[#D9ECE9] px-4 py-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[280px_1fr_320px] xl:grid-cols-[300px_1fr_360px]">
-        <aside className="flex h-full flex-col rounded border border-zinc-300 bg-[#D7E3E1] p-5">
-          <div className="flex items-center gap-3 rounded border border-zinc-300 bg-white p-3">
-            <Image src="/logo.png" alt="PeerMatch logo" width={30} height={30} />
+    <div className="min-h-screen bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <aside className="flex h-full min-h-[calc(100vh-4rem)] flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+          <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
+            <Image src="/logo.png" alt="PeerMatch logo" width={32} height={32} className="h-8 w-8 object-contain" />
             <div>
-              <p className="text-sm font-semibold text-zinc-900">PeerMatch</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-900">PeerMatch</p>
               <p className="text-[11px] text-zinc-500">Student Collaboration</p>
             </div>
           </div>
 
-          <nav className="mt-6 space-y-2">
-            <Link
-              href="/client-home"
-              className="block rounded-xl bg-[#FA642C] px-4 py-3 text-sm font-semibold text-white"
-            >
-              Dashboard
-            </Link>
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=create-post")}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-800 hover:bg-white"
-            >
-              Create Post
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=messages")}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-800 hover:bg-white"
-            >
-              Message
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=profile")}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-800 hover:bg-white"
-            >
-              Profile
-            </button>
+          <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1.5" aria-label="Main">
+            {navItems.map((item) => {
+              const active = isNavActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`${navItemClass} ${active ? navActiveClass : ""}`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
           </nav>
 
           <button
             type="button"
             onClick={handleLogout}
-            className="mt-auto rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+            className={`${navItemClass} mt-auto w-full justify-start border border-transparent pt-4`}
           >
-            Logout
+            <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+            <span>Logout</span>
           </button>
         </aside>
 
-        <main className="h-full rounded border border-zinc-300 bg-[#DDF0EE] p-6 lg:p-8">
-          <h1 className="text-3xl font-semibold text-zinc-900">
-            {displayName ? `Welcome back, ${displayName}!` : "Welcome back!"}
-          </h1>
-          <p className="text-sm text-zinc-600">Here's what's happening in your learning community</p>
+        <main className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white p-6 shadow-[0_4px_32px_rgba(15,23,42,0.04)] sm:p-8 lg:p-10">
+          <div
+            className={`flex min-h-0 flex-1 flex-col transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
+              isPanelVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.995] opacity-0"
+            }`}
+          >
+            {activePanel === "create-post" ? (
+              <section aria-labelledby="create-post-heading">
+                <h1 id="create-post-heading" className="text-4xl font-bold tracking-tight text-zinc-900">
+                  Create New Post
+                </h1>
+                <p className="mt-1.5 text-sm text-zinc-600">Share what you need help with and connect with peers</p>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=connections")}
-              className="rounded-xl border border-zinc-300 bg-zinc-100 p-6 text-left hover:bg-zinc-50 lg:p-7"
-            >
-              <p className="text-lg font-semibold text-zinc-900">Active Connections</p>
-              <p className="mt-5 text-5xl font-semibold text-zinc-900">{displayConnections || 0}</p>
-              <p className="mt-2 text-sm text-zinc-600">Students you're helping or getting help from</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=hours")}
-              className="rounded-xl border border-zinc-300 bg-zinc-100 p-6 text-left hover:bg-zinc-50 lg:p-7"
-            >
-              <p className="text-lg font-semibold text-zinc-900">Hours This Week</p>
-              <p className="mt-5 text-5xl font-semibold text-zinc-900">{displayHours || 0}</p>
-              <p className="mt-2 text-sm text-zinc-600">Time spent in peer collaboration</p>
-            </button>
-          </div>
-
-          <hr className="my-6 border-zinc-400/60" />
-
-          <h2 className="text-[44px] font-semibold leading-tight text-zinc-900">{postsHeading}</h2>
-
-          <div className="mt-5 space-y-4">
-            {posts.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-300 bg-zinc-100 p-6 text-zinc-700 lg:p-8">
-                No latest post
-              </div>
-            ) : (
-              posts.map((post) => (
-                <button
-                  key={post.id}
-                  type="button"
-                  onClick={() => router.push(`/client-home?post=${encodeURIComponent(post.id)}`)}
-                  className="block w-full rounded-2xl border border-zinc-300 bg-zinc-100 p-5 text-left hover:bg-zinc-50 lg:p-7"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={post.avatar}
-                        alt={`${post.author} avatar`}
-                        className="h-10 w-10 rounded-full border border-zinc-300"
-                      />
+                <div className="mt-7 grid gap-5 xl:grid-cols-[minmax(0,1fr)_230px]">
+                  <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-5 shadow-sm sm:p-6">
+                    <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
                       <div>
-                        <p className="text-2xl font-semibold text-zinc-900">{post.author}</p>
-                        <p className="text-xs text-zinc-500">{post.timeAgo}</p>
+                        <label htmlFor="post-category" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                          Subject Category
+                        </label>
+                        <input
+                          id="post-category"
+                          type="text"
+                          placeholder="e.g. Mathematics, Physics, History"
+                          className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                        />
+                        <p className="mt-1.5 text-[11px] text-zinc-500">What subject do you need help with?</p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="post-urgency" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                            Urgency Level
+                          </label>
+                          <div className="relative">
+                            <select
+                              id="post-urgency"
+                              defaultValue="medium"
+                              className="h-11 w-full appearance-none rounded-xl border border-zinc-300 bg-white px-3 pr-9 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                            >
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                            <ChevronDown
+                              aria-hidden="true"
+                              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-700"
+                              strokeWidth={2}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="post-rate" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                            Hourly Rate
+                          </label>
+                          <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
+                            <input
+                              id="post-rate"
+                              type="text"
+                              defaultValue="25"
+                              className="h-11 w-full rounded-xl border border-zinc-300 bg-white pl-7 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label htmlFor="post-description" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                          Description
+                        </label>
+                        <textarea
+                          id="post-description"
+                          placeholder="Describe what you need help with in detail. Be specific about topics, deadlines, and learning goals..."
+                          className="h-32 w-full resize-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                        />
+                        <p className="mt-1.5 text-[11px] text-zinc-500">Detailed descriptions get better responses</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          type="submit"
+                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF6B35] px-4 text-sm font-semibold text-white transition hover:brightness-95"
+                        >
+                          <Send className="h-4 w-4" strokeWidth={2} />
+                          <span>Post Request</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-700 transition hover:bg-zinc-50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+
+                  <div className="space-y-4 xl:max-h-[calc(100vh-11rem)] xl:overflow-y-auto xl:pr-1">
+                    <aside className="rounded-2xl border border-[#F3DCCF] bg-[#FFF2EB] p-4 shadow-sm">
+                      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+                        <Lightbulb className="h-4 w-4 text-[#FF6B35]" strokeWidth={1.8} />
+                        <span>Pro Tips</span>
+                      </h2>
+                      <ul className="mt-3 space-y-1.5 text-xs leading-5 text-zinc-600">
+                        <li>- Be specific about what you need</li>
+                        <li>- Set realistic deadlines</li>
+                        <li>- Offer fair rates</li>
+                        <li>- Provide context for your request</li>
+                      </ul>
+                    </aside>
+                  </div>
+                </div>
+              </section>
+            ) : activePanel === "messages" ? (
+              <section
+                aria-labelledby="messages-heading"
+                className="h-full w-full min-h-[700px] overflow-hidden rounded-2xl border border-zinc-200 bg-[#F3F6F5]"
+              >
+                <div className="grid h-full grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
+                  <aside className="border-b border-zinc-200 bg-white/65 p-4 md:border-b-0 md:border-r">
+                    <h1 id="messages-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+                      Messages
+                    </h1>
+                    <div className="relative mt-3">
+                      <Search
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                        strokeWidth={1.8}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Search conversations..."
+                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-4 w-full rounded-xl border border-zinc-200 bg-[#FFF2EB] px-3 py-3 text-left transition hover:bg-[#ffe8db]"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FF6B35] text-xs font-semibold text-white">
+                          AJ
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-semibold text-zinc-900">Alex Johnson</p>
+                            <p className="text-[11px] text-zinc-500">2m ago</p>
+                          </div>
+                          <p className="truncate text-xs text-zinc-600">Hey! Did you finish the project?</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#4DD2AC] px-4 text-sm font-semibold text-white transition hover:brightness-95"
+                    >
+                      <span className="text-base leading-none">+</span>
+                      <span>New Chat</span>
+                    </button>
+                  </aside>
+
+                  <div className="grid min-h-0 grid-rows-[auto_1fr_auto] bg-white">
+                    <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900">Alex Johnson</p>
+                        <p className="text-xs text-zinc-500">Online</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                          <Phone className="h-4 w-4" strokeWidth={1.8} />
+                        </button>
+                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                          <Video className="h-4 w-4" strokeWidth={1.8} />
+                        </button>
+                        <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                          <Info className="h-4 w-4" strokeWidth={1.8} />
+                        </button>
+                      </div>
+                    </header>
+
+                    <div className="space-y-3 overflow-y-auto px-4 py-4">
+                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
+                        <p className="text-sm text-zinc-900">Hey! How are you doing?</p>
+                        <p className="mt-1 text-[11px] text-zinc-500">10:30 AM</p>
+                      </div>
+                      <div className="ml-auto max-w-[70%] rounded-2xl rounded-tr-md bg-[#4DD2AC] px-3.5 py-2.5 text-white">
+                        <p className="text-sm">Hi Alex! I&apos;m doing great, thanks for asking!</p>
+                        <p className="mt-1 text-[11px] text-white/80">10:32 AM</p>
+                      </div>
+                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
+                        <p className="text-sm text-zinc-900">Did you finish the project we discussed last week?</p>
+                        <p className="mt-1 text-[11px] text-zinc-500">10:35 AM</p>
+                      </div>
+                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
+                        <p className="text-sm text-zinc-900">I&apos;m almost done with my part of the research.</p>
+                        <p className="mt-1 text-[11px] text-zinc-500">10:36 AM</p>
+                      </div>
+                      <div className="ml-auto max-w-[70%] rounded-2xl rounded-tr-md bg-[#4DD2AC] px-3.5 py-2.5 text-white">
+                        <p className="text-sm">Perfect! I just finished mine too. Should we meet to review everything?</p>
+                        <p className="mt-1 text-[11px] text-white/80">10:38 AM</p>
+                      </div>
+                      <div className="max-w-[70%] rounded-2xl rounded-tl-md bg-zinc-100 px-3.5 py-2.5">
+                        <p className="text-sm text-zinc-900">Absolutely! How about tomorrow at 2 PM in the library?</p>
+                        <p className="mt-1 text-[11px] text-zinc-500">10:40 AM</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
-                        {post.category}
-                      </span>
-                      <span
-                        className={`rounded-full px-4 py-1 text-xs font-semibold ${
-                          post.priority === "Important"
-                            ? "bg-[#FFC31E] text-zinc-900"
-                            : "bg-[#56BA54] text-zinc-900"
+
+                    <form
+                      onSubmit={(event) => event.preventDefault()}
+                      className="flex items-center gap-2 border-t border-zinc-200 px-4 py-3"
+                    >
+                      <input
+                        type="text"
+                        placeholder="Type your message..."
+                        className="h-10 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
+                      />
+                      <button
+                        type="submit"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95"
+                        aria-label="Send message"
+                      >
+                        <Send className="h-4 w-4" strokeWidth={2} />
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </section>
+            ) : activePanel === "profile" ? (
+              <section aria-labelledby="profile-heading" className="flex min-h-0 flex-1 flex-col">
+                <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
+                  <article className="sticky top-4 z-10 h-fit w-full max-w-[320px] rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm xl:max-w-none">
+                    <div className="mx-auto h-24 w-24 overflow-hidden rounded-full border border-zinc-200 bg-[#E8EFEC]">
+                      {profilePhotoDataUrl ? (
+                        <img src={profilePhotoDataUrl} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-zinc-800">
+                          {profileInitials}
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={profilePhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProfilePhotoChange}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => profilePhotoInputRef.current?.click()}
+                      className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Change photo
+                    </button>
+                    <h1 id="profile-heading" className="mt-3 text-center text-2xl font-bold tracking-tight text-zinc-900">
+                      {profileName}
+                    </h1>
+                    <p className="mt-1 text-center text-xs text-zinc-500">{displayEmail || "No email on file"}</p>
+                    <div className="mt-3 rounded-xl bg-white px-3 py-2 text-center">
+                      <p className="text-xs font-semibold text-[#FF6B35]">Verified Peer Match Account</p>
+                    </div>
+
+                    <div className="mt-4 space-y-2 border-t border-zinc-200 pt-4 text-xs text-zinc-700">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                        <input
+                          type="text"
+                          value={profileLocationInput}
+                          onChange={(event) => setProfileLocationInput(event.target.value)}
+                          placeholder="Add location"
+                          className="h-8 w-full rounded-lg border border-zinc-300 bg-white px-2 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                        <span>Response time: &lt; 1 hour</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Star className="h-3.5 w-3.5 text-zinc-500" />
+                        <span>Member since 2026</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex h-9 items-center justify-center gap-1 rounded-xl bg-[#FF6B35] text-xs font-semibold text-white hover:brightness-95"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Message
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-300 bg-white text-xs text-zinc-700 hover:bg-zinc-50"
+                      >
+                        <Heart className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </article>
+
+                  <div className="profile-scroll-pane max-h-[calc(100vh-10rem)] min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 [-webkit-overflow-scrolling:touch] scroll-smooth">
+                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
+                        <UserCircle className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
+                        About
+                      </h2>
+                      <label className="mt-3 block text-xs font-semibold text-zinc-700">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileNameInput}
+                        onChange={(event) => setProfileNameInput(event.target.value)}
+                        className="mt-1 h-10 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                      />
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-zinc-700">Course</label>
+                          <div className="relative mt-1">
+                            <select
+                              value={profileCourseInput}
+                              onChange={(event) => setProfileCourseInput(event.target.value)}
+                              className="h-10 w-full appearance-none rounded-xl border border-zinc-300 bg-white py-2 pl-3 pr-9 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                            >
+                              <option value="" disabled>
+                                Select a course
+                              </option>
+                              {courseOptions.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              aria-hidden="true"
+                              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600"
+                              strokeWidth={2}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-zinc-700">Year Level</label>
+                          <div className="relative mt-1">
+                            <select
+                              value={profileYearLevelInput}
+                              onChange={(event) => setProfileYearLevelInput(event.target.value)}
+                              className="h-10 w-full appearance-none rounded-xl border border-zinc-300 bg-white py-2 pl-3 pr-9 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                            >
+                              <option value="" disabled>
+                                Select a year level
+                              </option>
+                              {yearLevels.map((level) => (
+                                <option key={level} value={level}>
+                                  {level}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              aria-hidden="true"
+                              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600"
+                              strokeWidth={2}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <label className="mt-3 block text-xs font-semibold text-zinc-700">About Me</label>
+                      <textarea
+                        value={profileAboutInput}
+                        onChange={(event) => setProfileAboutInput(event.target.value)}
+                        placeholder="Write a short introduction..."
+                        rows={4}
+                        className="mt-1 w-full resize-none rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                      />
+                    </article>
+
+                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
+                        <FileText className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
+                        Featured Post
+                      </h2>
+                      {featuredWork.length > 0 ? (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {featuredWork.map((work) => (
+                            <div key={work.title} className="rounded-xl border border-zinc-200 bg-white p-3">
+                              <div className="h-20 rounded-lg bg-[#E8EFEC]" />
+                              <p className="mt-2 text-sm font-semibold text-zinc-900">{work.title}</p>
+                              <p className="text-xs text-zinc-500">{work.category}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-3 min-h-20 rounded-xl border border-dashed border-zinc-300 bg-white" />
+                      )}
+                    </article>
+
+                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
+                        <Handshake className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
+                        Helpers
+                      </h2>
+                      {skillsAndExpertise.length > 0 ? (
+                        <div className="mt-3 space-y-2.5">
+                          {skillsAndExpertise.map((helper, index) => (
+                            <div key={`${helper}-${index}`} className="rounded-xl border border-zinc-300 bg-white px-3 py-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8EFEC] text-[11px] font-semibold text-zinc-700">
+                                    {helper.slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-zinc-900">{helper}</p>
+                                    <p className="text-[10px] text-zinc-500">Helped recently</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] leading-none text-[#FF6B35]">★★★★★</p>
+                                  <p className="mt-1 text-[10px] text-zinc-500">4.{(index % 5) + 5}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+
+                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                      <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
+                        <MessageSquareQuote className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
+                        Reviews
+                      </h2>
+                      {recentReviews.length > 0 ? (
+                        <div className="mt-3 space-y-3">
+                          {recentReviews.map((review) => (
+                            <div key={`${review.name}-${review.timeAgo}`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                              <p className="text-sm font-semibold text-zinc-900">{review.name}</p>
+                              <p className="text-xs text-zinc-500">{review.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-3 min-h-20 rounded-xl border border-dashed border-zinc-300 bg-white" />
+                      )}
+                    </article>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={`text-xs ${profileStatusMessage.includes("Could not") ? "text-red-600" : "text-zinc-500"}`}>
+                        {profileSaving ? "Saving profile..." : profileStatusMessage || "Make changes then click Save Updates."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveProfile()}
+                        disabled={!canSaveProfile}
+                        className={`inline-flex h-9 items-center justify-center rounded-xl px-3.5 text-xs font-semibold transition ${
+                          canSaveProfile
+                            ? "cursor-pointer bg-[#FF6B35] text-white hover:brightness-95 active:brightness-90"
+                            : "cursor-not-allowed bg-zinc-500 text-zinc-100 opacity-85"
                         }`}
                       >
-                        {post.priority}
-                      </span>
+                        {profileSaving ? "Saving..." : "Save Updates"}
+                      </button>
                     </div>
                   </div>
-                  <p className="mt-4 text-[38px] font-semibold leading-tight text-zinc-900">{post.title}</p>
-                  <p className="mt-5 text-[26px] leading-[1.35] text-zinc-700">{post.content}</p>
+                </div>
+              </section>
+            ) : (
+              <>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+                {displayName ? `Welcome back, ${displayName}!` : "Welcome back!"}
+              </h1>
+              <p className="mt-2 text-sm text-zinc-500">Here&apos;s what&apos;s happening in your learning community</p>
+
+              <div className="mt-8 grid gap-5 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => router.push("/client-home?panel=connections")}
+                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
+                >
+                  <div className="flex items-start gap-4">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F0F7F4] text-zinc-700">
+                      <Users className="h-6 w-6" strokeWidth={1.75} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-zinc-900">Active Connections</p>
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                        Students you&apos;re helping or getting help from
+                      </p>
+                    </div>
+                  </div>
                 </button>
-              ))
+                <button
+                  type="button"
+                  onClick={() => router.push("/client-home?panel=hours")}
+                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
+                >
+                  <div className="flex items-start gap-4">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F0F7F4] text-zinc-700">
+                      <Clock className="h-6 w-6" strokeWidth={1.75} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-zinc-900">Hours This Week</p>
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">Time spent in peer collaboration</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <hr className="my-10 border-zinc-200" />
+
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">{postsHeading}</h2>
+
+              <div className="mt-5 space-y-4">
+                {posts.length > 0 ? (
+                  posts.map((post) => (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => router.push(`/client-home?post=${encodeURIComponent(post.id)}`)}
+                      className="block w-full rounded-2xl border border-zinc-100 bg-zinc-50 p-5 text-left hover:bg-zinc-100 lg:p-7"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={post.avatar}
+                            alt={`${post.author} avatar`}
+                            className="h-10 w-10 rounded-full border border-zinc-300"
+                          />
+                          <div>
+                            <p className="text-2xl font-semibold text-zinc-900">{post.author}</p>
+                            <p className="text-xs text-zinc-500">{post.timeAgo}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
+                            {post.category}
+                          </span>
+                          <span
+                            className={`rounded-full px-4 py-1 text-xs font-semibold ${
+                              post.priority === "Important"
+                                ? "bg-[#FFC31E] text-zinc-900"
+                                : "bg-[#56BA54] text-zinc-900"
+                            }`}
+                          >
+                            {post.priority}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-2xl font-semibold leading-tight text-zinc-900">{post.title}</p>
+                      <p className="mt-5 text-base leading-[1.6] text-zinc-700">{post.content}</p>
+                    </button>
+                  ))
+                ) : null}
+              </div>
+              </>
             )}
           </div>
         </main>
 
-        <aside className="h-full rounded border border-zinc-300 bg-[#D7E3E1] p-5">
-          <div className="flex items-center justify-between">
+        <aside className="flex h-full min-h-0 flex-col gap-8 rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+          <section>
             <h3 className="text-sm font-semibold text-zinc-900">Notifications</h3>
-          </div>
-          {notifications.length === 0 ? (
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=notifications")}
-              className="mt-3 w-full rounded-lg border border-zinc-400 bg-white px-3 py-3 text-left text-xs text-zinc-700 hover:bg-zinc-50"
-            >
-              <span className="inline-flex items-center gap-2">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-zinc-600">
-                  <path d="M12 22a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 22Z" fill="currentColor" />
-                  <path
-                    d="M18 16.5H6c.6-.9 1.5-2 1.5-5.5a4.5 4.5 0 0 1 9 0c0 3.5.9 4.6 1.5 5.5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span>No Notification Yet</span>
-              </span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => router.push("/client-home?panel=notifications")}
-              className="mt-3 w-full rounded-lg border border-zinc-400 bg-white px-3 py-3 text-left text-xs text-zinc-700 hover:bg-zinc-50"
-            >
-              <span className="inline-flex items-center gap-2">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-zinc-600">
-                  <path d="M12 22a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 22Z" fill="currentColor" />
-                  <path
-                    d="M18 16.5H6c.6-.9 1.5-2 1.5-5.5a4.5 4.5 0 0 1 9 0c0 3.5.9 4.6 1.5 5.5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span>{notifications[0]}</span>
-              </span>
-            </button>
-          )}
+            {notifications.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => router.push("/client-home?panel=notifications")}
+                className="mt-3 w-full rounded-xl border border-zinc-200 bg-white px-4 py-4 text-left text-xs text-zinc-700 shadow-sm hover:bg-zinc-50"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Bell aria-hidden="true" className="h-4 w-4 text-zinc-600" strokeWidth={1.6} />
+                  <span>Someone responded to your post</span>
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/client-home?panel=notifications")}
+                className="mt-3 w-full rounded-xl border border-zinc-200 bg-white px-4 py-4 text-left text-xs text-zinc-700 shadow-sm hover:bg-zinc-50"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Bell aria-hidden="true" className="h-4 w-4 text-zinc-600" strokeWidth={1.6} />
+                  <span>{notifications[0]}</span>
+                </span>
+              </button>
+            )}
+          </section>
 
-          <div className="mt-7 flex items-center justify-between">
+          <section>
             <h3 className="text-sm font-semibold text-zinc-900">Recent Activities</h3>
-          </div>
-          <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-3">
             {recentActivities.length === 0 ? (
-              <div className="rounded-lg bg-zinc-200 p-3 text-xs text-zinc-700">No Recent Activities</div>
+              <>
+                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
+                  <p className="text-sm font-semibold text-zinc-900">Daddy</p>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
+                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">2 min ago</p>
+                </div>
+                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
+                  <p className="text-sm font-semibold text-zinc-900">Allosaur</p>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
+                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">15 min ago</p>
+                </div>
+                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
+                  <p className="text-sm font-semibold text-zinc-900">Hero</p>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
+                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">1 hr ago</p>
+                </div>
+              </>
             ) : (
               recentActivities.map((activity) => (
                 <button
                   key={activity.id}
                   type="button"
                   onClick={() => router.push(`/client-home?activity=${encodeURIComponent(activity.id)}`)}
-                  className="w-full rounded-lg bg-zinc-200 p-3 text-left hover:bg-zinc-300"
+                  className="w-full rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm hover:bg-[#efe4dd]"
                 >
                   <div className="flex gap-2">
                     <img
@@ -275,7 +1023,8 @@ export default function ClientHomePage() {
                 </button>
               ))
             )}
-          </div>
+            </div>
+          </section>
         </aside>
       </div>
     </div>

@@ -57,6 +57,7 @@ export default function ClientDetailsPage() {
   const router = useRouter();
   const [course, setCourse] = useState("");
   const [yearLevel, setYearLevel] = useState(yearLevels[0]);
+  const [skills, setSkills] = useState("");
   const [aboutMe, setAboutMe] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -104,6 +105,7 @@ export default function ClientDetailsPage() {
         await apiPostJson("/api/auth/profile", {
           course,
           yearLevel,
+          skills,
           aboutMe,
           ...(photoDataUrl ? { photoDataUrl } : {}),
         });
@@ -121,7 +123,7 @@ export default function ClientDetailsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#D8F3E9]">
+    <div className="min-h-screen bg-[#E5F6F4]">
       <div className="flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-50 w-full">
           <div className="w-full rounded-b-[2rem] border-b border-slate-200/70 bg-white/95 px-6 py-4 shadow-sm shadow-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/80">
@@ -140,14 +142,13 @@ export default function ClientDetailsPage() {
         <main className="flex flex-1 items-start justify-center px-4 py-12">
           <div className="w-full max-w-[1120px]">
             <div className="text-center">
-              <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Complete Your Profile</h1>
+              <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Complete Your Client Profile</h1>
               <p className="mt-2 text-sm text-slate-600">
-                Set up your profile to start collaborating with other students
+                Set up your client profile to connect with freelancers and peers
               </p>
             </div>
 
             <div className="mt-10 grid gap-8 lg:grid-cols-[320px_1fr] lg:items-start">
-              {/* Left profile card */}
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col items-center gap-4">
                   <div className="relative h-24 w-24 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
@@ -174,13 +175,12 @@ export default function ClientDetailsPage() {
                   <div className="w-full rounded-xl bg-slate-50 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-900">Tip</p>
                     <p className="mt-1 text-[11px] leading-5 text-slate-600">
-                      A complete profile helps you find better study partners and join more collaboration opportunities.
+                      A complete client profile helps freelancers understand your needs and deliver better results.
                     </p>
                   </div>
                 </div>
               </section>
 
-              {/* Right form card */}
               <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
                 <div
                   aria-live="polite"
@@ -195,8 +195,8 @@ export default function ClientDetailsPage() {
                       showConfirmation ? "translate-y-0 scale-100" : "-translate-y-2 scale-[0.98]"
                     }`}
                   >
-                    <p className="text-sm font-semibold">Account created successfully.</p>
-                    <p className="mt-1 text-xs text-emerald-800/80">Taking you to your Client Home…</p>
+                    <p className="text-sm font-semibold">Profile saved successfully.</p>
+                    <p className="mt-1 text-xs text-emerald-800/80">Taking you to your home page…</p>
                   </div>
                 </div>
 
@@ -258,30 +258,40 @@ export default function ClientDetailsPage() {
                         2
                       </span>
                       <div>
-                        <p className="text-sm font-semibold text-slate-950">About You</p>
+                        <p className="text-sm font-semibold text-slate-950">Client Profile</p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Share a bit about yourself to help others get to know you
+                          Describe what you need and share context for your project
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-5">
+                    <div className="mt-5 grid gap-4">
                       <label className="block">
-                        <span className="text-xs font-medium text-slate-700">About Me</span>
+                        <span className="text-xs font-medium text-slate-700">Skills Needed</span>
+                        <input
+                          type="text"
+                          value={skills}
+                          onChange={(e) => setSkills(e.target.value)}
+                          placeholder="e.g. UI Design, Research, Programming"
+                          required
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#66A5CC] focus:ring-2 focus:ring-[#66A5CC]/25"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="text-xs font-medium text-slate-700">Project Details</span>
                         <textarea
                           value={aboutMe}
                           onChange={(e) => setAboutMe(e.target.value)}
-                          placeholder="Tell us about your interests, goals, and what you're looking for in study partners..."
+                          placeholder="Tell freelancers about your project goals, requirements, and expected outcomes..."
                           required
                           rows={5}
                           className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none focus:border-[#66A5CC] focus:ring-2 focus:ring-[#66A5CC]/25"
                         />
                       </label>
-                      <p className="mt-2 text-[11px] text-slate-500">{aboutMe.length}/500 characters</p>
+                      <p className="text-[11px] text-slate-500">{aboutMe.length}/500 characters</p>
                     </div>
                   </div>
-
-                  {/* Form completion section intentionally omitted per request. */}
 
                   <div className="pt-2">
                     <Button
@@ -297,7 +307,7 @@ export default function ClientDetailsPage() {
                       </p>
                     ) : null}
                     <p className="mt-3 text-center text-[11px] text-slate-500">
-                      You can update your profile anytime in your settings
+                      You can update your client profile anytime in your settings
                     </p>
                   </div>
                 </form>

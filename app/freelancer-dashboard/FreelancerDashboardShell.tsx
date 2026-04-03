@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { FreelancerSidebar } from "@/app/components/freelancer/FreelancerSidebar";
 import { FreelancerRightAside } from "@/app/components/freelancer/FreelancerRightAside";
 import { apiGetJson, ApiError } from "@/app/lib/api";
@@ -35,8 +35,10 @@ function isClientUser(user: MeUser | null): boolean {
 
 export function FreelancerDashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRouteContentVisible, setIsRouteContentVisible] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,11 +78,19 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
     if (clientUser) router.replace("/client-home");
   }, [user, loading, clientUser, router]);
 
+  useEffect(() => {
+    setIsRouteContentVisible(false);
+    const timeoutId = window.setTimeout(() => {
+      setIsRouteContentVisible(true);
+    }, 90);
+    return () => window.clearTimeout(timeoutId);
+  }, [pathname]);
+
   const value = useMemo(() => ({ user, loading }), [user, loading]);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+      <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4]">
         <p className="text-sm text-zinc-500">Loading…</p>
       </div>
     );
@@ -88,7 +98,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#F0F7F4] px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#E5F6F4] px-4">
         <p className="text-sm text-zinc-600">We couldn&apos;t load your session.</p>
         <button
           type="button"
@@ -103,7 +113,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   if (clientUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F0F7F4]">
+      <div className="flex min-h-screen items-center justify-center bg-[#E5F6F4]">
         <p className="text-sm text-zinc-500">Redirecting…</p>
       </div>
     );
@@ -111,12 +121,18 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
 
   return (
     <FreelancerUserContext.Provider value={value}>
-      <div className="min-h-screen bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="min-h-screen bg-[#E5F6F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <div className="min-h-0 lg:row-span-1">
             <FreelancerSidebar />
           </div>
-          <div className="min-h-0">{children}</div>
+          <div
+            className={`min-h-0 transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
+              isRouteContentVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.995] opacity-0"
+            }`}
+          >
+            {children}
+          </div>
           <div className="min-h-0 lg:row-span-1">
             <FreelancerRightAside />
           </div>
