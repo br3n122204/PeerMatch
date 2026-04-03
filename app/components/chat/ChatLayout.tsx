@@ -210,7 +210,6 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
       unsubUpdate();
     };
   }, [currentUserId]);
-
   const filteredConversations = useMemo(() => {
     return conversations;
   }, [conversations]);
@@ -220,7 +219,6 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
     if (!id) return false;
     return onlineUserIds.has(id);
   }, [activeUserId, onlineUserIds]);
-
   const handleSelectUserFromSearch = (u: UserSearchResult) => {
     // Temporary selection only.
     setActiveUserId(u.id);

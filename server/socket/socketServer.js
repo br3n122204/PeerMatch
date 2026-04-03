@@ -8,10 +8,6 @@ const User = require('../models/User');
 /** @type {Map<string, Set<string>>} userId → socket ids */
 const userIdToSocketIds = new Map();
 
-function isUserOnline(userId) {
-  return (userIdToSocketIds.get(userId)?.size || 0) > 0;
-}
-
 function markUserSocketConnected(userId, socketId) {
   const existing = userIdToSocketIds.get(userId);
   if (existing) {
