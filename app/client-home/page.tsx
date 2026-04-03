@@ -6,10 +6,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
+  BookOpen,
   CalendarDays,
   ChevronDown,
   CirclePlus,
   Clock,
+  DollarSign,
+  FilePenLine,
   FileText,
   Handshake,
   Heart,
@@ -20,6 +23,7 @@ import {
   MessageCircle,
   MessageSquare,
   MessageSquareQuote,
+  ShieldAlert,
   Send,
   Star,
   Upload,
@@ -421,7 +425,13 @@ function ClientHomePageContent() {
                   <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-5 shadow-sm sm:p-6">
                     <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
                       <div>
-                        <label htmlFor="post-category" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                        <label
+                          htmlFor="post-category"
+                          className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                        >
+                          <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                            <BookOpen className="h-3.5 w-3.5" strokeWidth={2} />
+                          </span>
                           Subject Category
                         </label>
                         <input
@@ -435,7 +445,13 @@ function ClientHomePageContent() {
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label htmlFor="post-urgency" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                          <label
+                            htmlFor="post-urgency"
+                            className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                          >
+                            <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                              <ShieldAlert className="h-3.5 w-3.5" strokeWidth={2} />
+                            </span>
                             Urgency Level
                           </label>
                           <div className="relative">
@@ -457,7 +473,13 @@ function ClientHomePageContent() {
                         </div>
 
                         <div>
-                          <label htmlFor="post-rate" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                          <label
+                            htmlFor="post-rate"
+                            className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                          >
+                            <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                              <DollarSign className="h-3.5 w-3.5" strokeWidth={2} />
+                            </span>
                             Hourly Rate
                           </label>
                           <div className="relative">
@@ -473,7 +495,13 @@ function ClientHomePageContent() {
                       </div>
 
                       <div>
-                        <label htmlFor="post-description" className="mb-1.5 block text-xs font-semibold text-zinc-900">
+                        <label
+                          htmlFor="post-description"
+                          className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                        >
+                          <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                            <FilePenLine className="h-3.5 w-3.5" strokeWidth={2} />
+                          </span>
                           Description
                         </label>
                         <textarea
@@ -776,7 +804,7 @@ function ClientHomePageContent() {
                   className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
                 >
                   <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F0F7F4] text-zinc-700">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
                       <Users className="h-6 w-6" strokeWidth={1.75} />
                     </span>
                     <div className="min-w-0">
@@ -793,7 +821,7 @@ function ClientHomePageContent() {
                   className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
                 >
                   <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F0F7F4] text-zinc-700">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
                       <Clock className="h-6 w-6" strokeWidth={1.75} />
                     </span>
                     <div className="min-w-0">

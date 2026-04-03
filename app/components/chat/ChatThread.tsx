@@ -216,7 +216,11 @@ export function ChatThread({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate leading-tight text-sm font-semibold text-zinc-900">{title}</p>
-            <p className="mt-1 text-xs font-medium leading-tight text-[#4DD2AC]">
+            <p
+              className={`mt-1 text-xs font-medium leading-tight ${
+                statusText === "Online" ? "text-[#4DD2AC]" : "text-zinc-700"
+              }`}
+            >
               {canChat ? statusText : ""}
             </p>
           </div>

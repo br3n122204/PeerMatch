@@ -5,8 +5,27 @@ const { COOKIE_NAME, verifyAccessToken } = require('../middleware/auth');
 const Message = require('../models/Message');
 const User = require('../models/User');
 
-/** @type {Map<string, string>} userId → socket.id (last connection wins) */
-const userIdToSocketId = new Map();
+/** @type {Map<string, Set<string>>} userId → socket ids */
+const userIdToSocketIds = new Map();
+
+function markUserSocketConnected(userId, socketId) {
+  const existing = userIdToSocketIds.get(userId);
+  if (existing) {
+    existing.add(socketId);
+    return false;
+  }
+  userIdToSocketIds.set(userId, new Set([socketId]));
+  return true;
+}
+
+function markUserSocketDisconnected(userId, socketId) {
+  const sockets = userIdToSocketIds.get(userId);
+  if (!sockets) return false;
+  sockets.delete(socketId);
+  if (sockets.size > 0) return false;
+  userIdToSocketIds.delete(userId);
+  return true;
+}
 
 function getTokenFromHandshake(handshake) {
   const authToken = handshake.auth?.token;
@@ -48,7 +67,14 @@ function attachSocketServer(httpServer, options) {
   io.on('connection', (socket) => {
     const uid = socket.userId;
 
-    userIdToSocketId.set(uid, socket.id);
+    const becameOnline = markUserSocketConnected(uid, socket.id);
+    if (becameOnline) {
+      io.emit('presence_update', { userId: uid, online: true });
+    }
+
+    socket.emit('presence_snapshot', {
+      onlineUserIds: Array.from(userIdToSocketIds.keys()),
+    });
 
     // Deliver any previously-sent messages to this user (offline → online).
     // We mark them as delivered once we emit them.
@@ -85,7 +111,10 @@ function attachSocketServer(httpServer, options) {
         socket.emit('socket_error', { message: 'Invalid registration.' });
         return;
       }
-      userIdToSocketId.set(uid, socket.id);
+      const justOnline = markUserSocketConnected(uid, socket.id);
+      if (justOnline) {
+        io.emit('presence_update', { userId: uid, online: true });
+      }
     });
 
     socket.on('send_message', async (payload) => {
@@ -129,10 +158,12 @@ function attachSocketServer(httpServer, options) {
           status: 'sent',
         };
 
-        const targetSocketId = userIdToSocketId.get(receiverId);
-        if (targetSocketId) {
+        const receiverSockets = userIdToSocketIds.get(receiverId);
+        if (receiverSockets && receiverSockets.size > 0) {
           await Message.updateOne({ _id: doc._id }, { $set: { status: 'delivered' } });
-          io.to(targetSocketId).emit('receive_message', { ...out, status: 'delivered' });
+          for (const sid of receiverSockets) {
+            io.to(sid).emit('receive_message', { ...out, status: 'delivered' });
+          }
         }
       } catch (err) {
         console.error(err);
@@ -141,8 +172,9 @@ function attachSocketServer(httpServer, options) {
     });
 
     socket.on('disconnect', () => {
-      if (userIdToSocketId.get(uid) === socket.id) {
-        userIdToSocketId.delete(uid);
+      const becameOffline = markUserSocketDisconnected(uid, socket.id);
+      if (becameOffline) {
+        io.emit('presence_update', { userId: uid, online: false });
       }
     });
   });

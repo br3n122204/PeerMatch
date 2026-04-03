@@ -89,3 +89,34 @@ export function subscribeSocketError(handler: (payload: { message?: string }) =>
     s.off("socket_error", handler);
   };
 }
+
+export type PresenceUpdatePayload = {
+  userId?: string;
+  online?: boolean;
+};
+
+export type PresenceSnapshotPayload = {
+  onlineUserIds?: string[];
+};
+
+export function subscribePresenceUpdate(handler: (payload: PresenceUpdatePayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("presence_update", handler);
+  return () => {
+    s.off("presence_update", handler);
+  };
+}
+
+export function subscribePresenceSnapshot(handler: (payload: PresenceSnapshotPayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("presence_snapshot", handler);
+  return () => {
+    s.off("presence_snapshot", handler);
+  };
+}

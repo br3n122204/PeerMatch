@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import { apiGetJson } from "@/app/lib/api";
+import { connectSocket, subscribePresenceSnapshot, subscribePresenceUpdate } from "@/app/lib/socket";
 import type { UserSearchResult } from "@/app/lib/userSearch";
 import { searchUsersByQuery } from "@/app/lib/userSearch";
 import { ChatThread } from "@/app/components/chat/ChatThread";
@@ -61,7 +62,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
 
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUserName, setActiveUserName] = useState<string>("");
-  const [activeUserConnected] = useState(true); // Placeholder until you track online presence
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
   const userNameByIdRef = useRef<Record<string, string>>({});
   const lastSidebarUpdateByUserIdRef = useRef<Record<string, { lastId?: string; lastTimestamp?: string }>>({});
@@ -176,10 +177,48 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
     };
   }, [currentUserId]);
 
+  useEffect(() => {
+    if (!currentUserId) {
+      setOnlineUserIds(new Set());
+      return;
+    }
+
+    connectSocket(currentUserId);
+
+    const unsubSnapshot = subscribePresenceSnapshot((payload) => {
+      const ids = Array.isArray(payload?.onlineUserIds) ? payload.onlineUserIds : [];
+      setOnlineUserIds(new Set(ids.map((id) => String(id))));
+    });
+
+    const unsubUpdate = subscribePresenceUpdate((payload) => {
+      const userId = String(payload?.userId || "").trim();
+      if (!userId) return;
+      const isOnline = Boolean(payload?.online);
+      setOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        if (isOnline) {
+          next.add(userId);
+        } else {
+          next.delete(userId);
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      unsubSnapshot();
+      unsubUpdate();
+    };
+  }, [currentUserId]);
   const filteredConversations = useMemo(() => {
     return conversations;
   }, [conversations]);
 
+  const activeUserConnected = useMemo(() => {
+    const id = String(activeUserId || "").trim();
+    if (!id) return false;
+    return onlineUserIds.has(id);
+  }, [activeUserId, onlineUserIds]);
   const handleSelectUserFromSearch = (u: UserSearchResult) => {
     // Temporary selection only.
     setActiveUserId(u.id);
