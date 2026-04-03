@@ -239,6 +239,80 @@ router.post('/profile', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select(
+      'name email accountType aboutMe skills photoDataUrl freelancerProfile',
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+
+    const stored = sanitizeFreelancerProfile(user.freelancerProfile || {});
+    const merged = {
+      ...stored,
+      course: stored.course || safeString(user.course, 120),
+      yearLevel: stored.yearLevel || safeString(user.yearLevel, 80),
+      bio: stored.bio || safeString(user.aboutMe, 800),
+      skills: stored.skills.length ? stored.skills : String(user.skills || '')
+        .split(',')
+        .map((skill) => safeString(skill, 40))
+        .filter(Boolean)
+        .slice(0, 10),
+    };
+
+    return res.json({
+      profile: {
+        name: safeString(user.name, 120),
+        email: safeString(user.email, 160),
+        accountType: safeString(user.accountType, 24),
+        photoDataUrl: typeof user.photoDataUrl === 'string' ? user.photoDataUrl : '',
+        ...merged,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error loading profile.' });
+  }
+});
+
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+
+    const nextName = safeString(req.body?.name, 120);
+    const nextPhotoDataUrl = typeof req.body?.photoDataUrl === 'string' ? req.body.photoDataUrl : '';
+    const nextProfile = sanitizeFreelancerProfile(req.body?.profile || {});
+
+    user.name = nextName || user.name;
+    user.aboutMe = nextProfile.bio;
+    user.skills = nextProfile.skills.join(', ');
+    user.course = nextProfile.course;
+    user.yearLevel = nextProfile.yearLevel;
+    user.photoDataUrl = nextPhotoDataUrl;
+    user.freelancerProfile = nextProfile;
+
+    await user.save();
+
+    return res.json({
+      message: 'Profile updated successfully.',
+      profile: {
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType || '',
+        photoDataUrl: user.photoDataUrl || '',
+        ...nextProfile,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error updating profile.' });
+  }
+});
+
 // Resend a new verification code (primarily used after expiry).
 router.post('/resend', async (req, res) => {
   try {
