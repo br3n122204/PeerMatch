@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+import { connectSocket } from "../lib/socket";
 import {
   normalizeAuthUser,
   persistFreelancerFromMe,
@@ -41,6 +42,9 @@ export default function LoginPage() {
         email: email.trim(),
         password,
       });
+      if (data.user?.id) {
+        connectSocket(String(data.user.id));
+      }
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("peermatch_role", data.user.role);
       }

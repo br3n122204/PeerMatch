@@ -30,66 +30,21 @@ function isInstitutionalEmail(email) {
   return normalizeEmail(email).endsWith(`@${domain}`);
 }
 
-function safeString(value, max = 2000) {
-  return String(value || '').trim().slice(0, max);
-}
-
-function safeInt(value, fallback = 0) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return parsed;
-}
-
-function normalizeArray(value) {
-  if (!Array.isArray(value)) return [];
-  return value;
-}
-
-function sanitizeFreelancerProfile(input) {
-  const profile = (input && typeof input === 'object') ? input : {};
-
-  const skills = normalizeArray(profile.skills).slice(0, 10).map((skill) => safeString(skill, 40)).filter(Boolean);
-  const languages = normalizeArray(profile.languages)
-    .slice(0, 10)
-    .map((lang) => ({
-      name: safeString(lang?.name, 40),
-      proficiency: safeString(lang?.proficiency, 24) || 'Fluent',
-    }))
-    .filter((lang) => lang.name);
-
-  const portfolio = normalizeArray(profile.portfolio)
-    .slice(0, 8)
-    .map((item) => ({
-      title: safeString(item?.title, 80),
-      description: safeString(item?.description, 240),
-    }))
-    .filter((item) => item.title || item.description);
-
-  const reviews = normalizeArray(profile.reviews)
-    .slice(0, 10)
-    .map((item) => ({
-      reviewer: safeString(item?.reviewer, 60),
-      text: safeString(item?.text, 280),
-      rating: Math.max(1, Math.min(5, safeInt(item?.rating, 5))),
-    }))
-    .filter((item) => item.reviewer || item.text);
-
+function serializeProfileUser(user) {
   return {
-    course: safeString(profile.course, 120),
-    yearLevel: safeString(profile.yearLevel, 80),
-    headline: safeString(profile.headline, 120),
-    location: safeString(profile.location, 120),
-    bio: safeString(profile.bio, 800),
-    featuredWork: safeString(profile.featuredWork, 1200),
-    availabilityLabel: safeString(profile.availabilityLabel, 40),
-    availabilityHours: safeString(profile.availabilityHours, 120),
-    sessions: safeInt(profile.sessions, 0),
-    successRate: safeInt(profile.successRate, 0),
-    responseTime: safeString(profile.responseTime, 40),
-    skills,
-    languages,
-    portfolio,
-    reviews,
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    verified: user.verified,
+    ...(user.accountType ? { accountType: user.accountType } : {}),
+    ...(user.course ? { course: user.course } : {}),
+    ...(user.yearLevel ? { yearLevel: user.yearLevel } : {}),
+    ...(user.aboutMe ? { aboutMe: user.aboutMe } : {}),
+    ...(user.skills ? { skills: user.skills } : {}),
+    ...(user.location ? { location: user.location } : {}),
+    ...(user.photoDataUrl ? { photoDataUrl: user.photoDataUrl } : {}),
+    profileCompleted: user.profileCompleted,
   };
 }
 
@@ -220,9 +175,24 @@ router.post('/verify', async (req, res) => {
   }
 });
 
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+    return res.json({
+      user: serializeProfileUser(user),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error loading profile.' });
+  }
+});
+
 router.post('/profile', authMiddleware, async (req, res) => {
   try {
-    const { course, yearLevel, aboutMe, skills, photoDataUrl } = req.body || {};
+    const { name, course, yearLevel, aboutMe, skills, location, photoDataUrl } = req.body || {};
 
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -233,48 +203,35 @@ router.post('/profile', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Please verify your email before completing your profile.' });
     }
 
-    const courseStr = String(course || '').trim();
-    const yearLevelStr = String(yearLevel || '').trim();
-    const aboutMeStr = String(aboutMe || '').trim();
-    const skillsStr = String(skills || '').trim();
-    const photoStr = typeof photoDataUrl === 'string' ? photoDataUrl : undefined;
+    const nameStr = typeof name === 'string' ? String(name).trim() : '';
+    const courseStr = typeof course === 'string' ? String(course).trim() : '';
+    const yearLevelStr = typeof yearLevel === 'string' ? String(yearLevel).trim() : '';
+    const aboutMeStr = typeof aboutMe === 'string' ? String(aboutMe).trim() : '';
+    const skillsStr = typeof skills === 'string' ? String(skills).trim() : '';
+    const locationStr = typeof location === 'string' ? String(location).trim() : '';
+    const photoStr = typeof photoDataUrl === 'string' ? photoDataUrl : '';
 
-    if (!courseStr || !yearLevelStr || !aboutMeStr) {
-      return res.status(400).json({ message: 'Please complete all required fields.' });
-    }
+    if (typeof name === 'string') user.name = nameStr || user.name;
+    if (typeof course === 'string') user.course = courseStr;
+    if (typeof yearLevel === 'string') user.yearLevel = yearLevelStr;
+    if (typeof aboutMe === 'string') user.aboutMe = aboutMeStr;
+    if (typeof skills === 'string') user.skills = skillsStr;
+    if (typeof location === 'string') user.location = locationStr;
+    if (typeof photoDataUrl === 'string') user.photoDataUrl = photoStr;
 
-    if (user.accountType === 'freelancer' && !skillsStr) {
-      return res.status(400).json({ message: 'Please provide your skills.' });
-    }
-
-    user.course = courseStr;
-    user.yearLevel = yearLevelStr;
-    user.aboutMe = aboutMeStr;
-    if (user.accountType === 'freelancer') {
-      user.skills = skillsStr;
-    }
-    if (photoStr) {
-      user.photoDataUrl = photoStr;
-    }
-    user.profileCompleted = true;
+    user.profileCompleted = Boolean(
+      String(user.course || '').trim() ||
+      String(user.yearLevel || '').trim() ||
+      String(user.aboutMe || '').trim() ||
+      String(user.skills || '').trim() ||
+      String(user.photoDataUrl || '').trim()
+    );
 
     await user.save();
 
     return res.json({
       message: 'Profile saved.',
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        verified: user.verified,
-        ...(user.accountType ? { accountType: user.accountType } : {}),
-        ...(user.course ? { course: user.course } : {}),
-        ...(user.yearLevel ? { yearLevel: user.yearLevel } : {}),
-        ...(user.aboutMe ? { aboutMe: user.aboutMe } : {}),
-        ...(user.skills ? { skills: user.skills } : {}),
-        profileCompleted: user.profileCompleted,
-      },
+      user: serializeProfileUser(user),
     });
   } catch (error) {
     console.error(error);

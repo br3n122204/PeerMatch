@@ -120,6 +120,23 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
+/**
+ * Verify a JWT access token (same rules as authMiddleware). Used by Socket.IO handshake.
+ * @param {string | null | undefined} token
+ * @returns {{ userId: string, role: string } | null}
+ */
+function verifyAccessToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const decoded = jwt.verify(token, getJwtSecret());
+    const userId = decoded.userId || decoded.sub;
+    if (!userId || !decoded.role) return null;
+    return { userId: String(userId), role: decoded.role };
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   COOKIE_NAME,
   ADMIN_COOKIE_NAME,
@@ -131,4 +148,5 @@ module.exports = {
   clearAccessTokenCookie,
   clearAccessTokenCookieForReq,
   extractToken,
+  verifyAccessToken,
 };

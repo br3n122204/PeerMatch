@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
   yearLevel: { type: String, trim: true },
   aboutMe: { type: String, trim: true },
   skills: { type: String, trim: true },
+  location: { type: String, trim: true },
   photoDataUrl: { type: String },
   freelancerProfile: {
     type: mongoose.Schema.Types.Mixed,
