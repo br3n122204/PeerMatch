@@ -48,6 +48,72 @@ function serializeProfileUser(user) {
   };
 }
 
+function safeString(value, max = 2000) {
+  return String(value || '').trim().slice(0, max);
+}
+
+function safeInt(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function normalizeArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value;
+}
+
+function sanitizeFreelancerProfile(input) {
+  const profile = input && typeof input === 'object' ? input : {};
+
+  const skills = normalizeArray(profile.skills)
+    .slice(0, 10)
+    .map((skill) => safeString(skill, 40))
+    .filter(Boolean);
+  const languages = normalizeArray(profile.languages)
+    .slice(0, 10)
+    .map((lang) => ({
+      name: safeString(lang?.name, 40),
+      proficiency: safeString(lang?.proficiency, 24) || 'Fluent',
+    }))
+    .filter((lang) => lang.name);
+
+  const portfolio = normalizeArray(profile.portfolio)
+    .slice(0, 8)
+    .map((item) => ({
+      title: safeString(item?.title, 80),
+      description: safeString(item?.description, 240),
+    }))
+    .filter((item) => item.title || item.description);
+
+  const reviews = normalizeArray(profile.reviews)
+    .slice(0, 10)
+    .map((item) => ({
+      reviewer: safeString(item?.reviewer, 60),
+      text: safeString(item?.text, 280),
+      rating: Math.max(1, Math.min(5, safeInt(item?.rating, 5))),
+    }))
+    .filter((item) => item.reviewer || item.text);
+
+  return {
+    course: safeString(profile.course, 120),
+    yearLevel: safeString(profile.yearLevel, 80),
+    headline: safeString(profile.headline, 120),
+    location: safeString(profile.location, 120),
+    bio: safeString(profile.bio, 800),
+    featuredWork: safeString(profile.featuredWork, 1200),
+    availabilityLabel: safeString(profile.availabilityLabel, 40),
+    availabilityHours: safeString(profile.availabilityHours, 120),
+    sessions: safeInt(profile.sessions, 0),
+    successRate: safeInt(profile.successRate, 0),
+    responseTime: safeString(profile.responseTime, 40),
+    skills,
+    languages,
+    portfolio,
+    reviews,
+  };
+}
+
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role: registrationPersona } = req.body;
@@ -175,21 +241,6 @@ router.post('/verify', async (req, res) => {
   }
 });
 
-router.get('/profile', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'Account not found.' });
-    }
-    return res.json({
-      user: serializeProfileUser(user),
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Server error loading profile.' });
-  }
-});
-
 router.post('/profile', authMiddleware, async (req, res) => {
   try {
     const { name, course, yearLevel, aboutMe, skills, location, photoDataUrl } = req.body || {};
@@ -236,6 +287,83 @@ router.post('/profile', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Server error saving profile.' });
+  }
+});
+
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+
+    const stored = sanitizeFreelancerProfile(user.freelancerProfile || {});
+    const merged = {
+      ...stored,
+      course: stored.course || safeString(user.course, 120),
+      yearLevel: stored.yearLevel || safeString(user.yearLevel, 80),
+      bio: stored.bio || safeString(user.aboutMe, 800),
+      skills: stored.skills.length
+        ? stored.skills
+        : String(user.skills || '')
+            .split(',')
+            .map((skill) => safeString(skill, 40))
+            .filter(Boolean)
+            .slice(0, 10),
+    };
+
+    return res.json({
+      user: serializeProfileUser(user),
+      profile: {
+        name: safeString(user.name, 120),
+        email: safeString(user.email, 160),
+        accountType: safeString(user.accountType, 24),
+        photoDataUrl: typeof user.photoDataUrl === 'string' ? user.photoDataUrl : '',
+        ...merged,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error loading profile.' });
+  }
+});
+
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' });
+    }
+
+    const nextName = safeString(req.body?.name, 120);
+    const nextPhotoDataUrl = typeof req.body?.photoDataUrl === 'string' ? req.body.photoDataUrl : '';
+    const nextProfile = sanitizeFreelancerProfile(req.body?.profile || {});
+
+    user.name = nextName || user.name;
+    user.aboutMe = nextProfile.bio;
+    user.skills = nextProfile.skills.join(', ');
+    user.course = nextProfile.course;
+    user.yearLevel = nextProfile.yearLevel;
+    user.location = nextProfile.location;
+    user.photoDataUrl = nextPhotoDataUrl;
+    user.freelancerProfile = nextProfile;
+    user.markModified('freelancerProfile');
+
+    await user.save();
+
+    return res.json({
+      message: 'Profile updated successfully.',
+      profile: {
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType || '',
+        photoDataUrl: user.photoDataUrl || '',
+        ...nextProfile,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Server error updating profile.' });
   }
 });
 

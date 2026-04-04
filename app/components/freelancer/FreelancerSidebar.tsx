@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, LogOut, MessageCircle, Search, User } from "lucide-react";
 import { apiPostJson } from "@/app/lib/api";
+import { disconnectSocket } from "@/app/lib/socket";
 import { clearFreelancerGreetingSession } from "@/app/lib/freelancerStorage";
 
 const navItemClass =
@@ -34,13 +35,14 @@ export function FreelancerSidebar() {
     try {
       await apiPostJson("/api/auth/logout", {});
     } finally {
+      disconnectSocket();
       clearFreelancerGreetingSession();
       router.push("/login");
     }
   };
 
   return (
-    <aside className="flex h-full min-h-[calc(100vh-4rem)] flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+    <aside className="sticky top-6 flex h-[calc(100vh-3rem)] min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
       <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
         <Image src="/logo.png" alt="PeerMatch" width={32} height={32} className="h-8 w-8 object-contain" />
         <div className="min-w-0 leading-tight">
@@ -49,7 +51,7 @@ export function FreelancerSidebar() {
         </div>
       </div>
 
-      <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1.5" aria-label="Main">
+      <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1" aria-label="Main">
         {items.map((item) => {
           const active = isActive(item.href);
           return (
@@ -69,7 +71,7 @@ export function FreelancerSidebar() {
       <button
         type="button"
         onClick={handleLogout}
-        className={`${navItemClass} mt-auto w-full justify-start border border-transparent pt-4`}
+        className={`${navItemClass} mt-4 w-full justify-start border border-transparent`}
       >
         <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} />
         <span>Logout</span>

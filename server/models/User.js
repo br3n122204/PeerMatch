@@ -25,6 +25,10 @@ const userSchema = new mongoose.Schema({
   skills: { type: String, trim: true },
   location: { type: String, trim: true },
   photoDataUrl: { type: String },
+  freelancerProfile: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
   profileCompleted: { type: Boolean, default: false },
   verified: { type: Boolean, default: false },
   verification: { type: verificationSchema },
