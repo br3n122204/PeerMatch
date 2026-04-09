@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import { apiGetJson } from "@/app/lib/api";
-import { connectSocket, subscribePresenceSnapshot, subscribePresenceUpdate } from "@/app/lib/socket";
+import { connectSocket, subscribePresenceSnapshot, subscribePresenceUpdate, subscribeReceiveMessage } from "@/app/lib/socket";
 import type { UserSearchResult } from "@/app/lib/userSearch";
 import { searchUsersByQuery } from "@/app/lib/userSearch";
 import { ChatThread } from "@/app/components/chat/ChatThread";
@@ -210,6 +210,47 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
       unsubUpdate();
     };
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const unsub = subscribeReceiveMessage((msg) => {
+      const senderId = String(msg?.senderId || "").trim();
+      const receiverId = String(msg?.receiverId || "").trim();
+      if (!senderId || !receiverId) return;
+      if (senderId !== currentUserId && receiverId !== currentUserId) return;
+
+      const otherId = senderId === currentUserId ? receiverId : senderId;
+      if (!otherId) return;
+
+      const knownName = userNameByIdRef.current[otherId] || (otherId === activeUserId ? activeUserName : "") || "Unknown";
+      userNameByIdRef.current[otherId] = knownName;
+
+      setConversations((prevList) => {
+        const existing = prevList.find((c) => c.otherUserId === otherId);
+        const hasUnread = senderId !== currentUserId && otherId !== activeUserId;
+        const nextItem: Conversation = {
+          otherUserId: otherId,
+          otherName: existing?.otherName || knownName,
+          lastMessagePreview: msg.message || "",
+          lastTimestamp: msg.timestamp || null,
+          hasUnread,
+        };
+
+        const merged = existing
+          ? prevList.map((c) => (c.otherUserId === otherId ? { ...c, ...nextItem } : c))
+          : [nextItem, ...prevList];
+
+        return merged.sort((a, b) => {
+          const at = a.lastTimestamp ? new Date(a.lastTimestamp).getTime() : 0;
+          const bt = b.lastTimestamp ? new Date(b.lastTimestamp).getTime() : 0;
+          return bt - at;
+        });
+      });
+    });
+
+    return unsub;
+  }, [currentUserId, activeUserId, activeUserName]);
   const filteredConversations = useMemo(() => {
     return conversations;
   }, [conversations]);
@@ -233,6 +274,9 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
     setActiveUserId(c.otherUserId);
     setActiveUserName(c.otherName);
     userNameByIdRef.current[c.otherUserId] = c.otherName;
+    setConversations((prev) =>
+      prev.map((item) => (item.otherUserId === c.otherUserId ? { ...item, hasUnread: false } : item)),
+    );
     setDropdownOpen(false);
     setSearchFocused(false);
   };
@@ -247,10 +291,10 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
   };
 
   return (
-    <div className={`flex h-full w-full h-[700px] overflow-hidden bg-[#F5F5F5] ${className}`}>
+    <div className={`flex h-full max-h-full min-h-0 w-full min-w-0 overflow-hidden bg-[#F5F5F5] ${className}`}>
       {/* Left sidebar */}
-      <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-zinc-200 bg-white">
-        <div className="px-4 pt-6 pb-4">
+      <aside className="flex h-full max-h-full min-h-0 w-[300px] shrink-0 flex-col overflow-hidden border-r border-zinc-200 bg-white">
+        <div className="shrink-0 px-4 pt-6 pb-4">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Messages</h1>
 
           <div ref={dropdownWrapRef} className="relative mt-4">
@@ -312,7 +356,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="h-0 min-h-0 flex-1 overflow-y-scroll overscroll-contain px-4 pb-4 [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-300 [&::-webkit-scrollbar-track]:bg-transparent">
           <div className="space-y-3">
             {filteredConversations.map((c) => {
               const active = c.otherUserId === activeUserId;
@@ -334,13 +378,13 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
                         <p
                           className={`truncate text-sm ${
                             c.hasUnread ? "font-bold" : "font-semibold"
-                      } text-zinc-900 leading-tight`}
+                          } text-zinc-900 leading-tight`}
                         >
                           {c.otherName}
                         </p>
-                    <p className="text-[11px] leading-tight font-medium text-zinc-500">
-                      {formatTimeAgo(c.lastTimestamp || undefined)}
-                    </p>
+                        <p className="text-[11px] font-medium leading-tight text-zinc-500">
+                          {formatTimeAgo(c.lastTimestamp || undefined)}
+                        </p>
                       </div>
                       <p
                         className={`mt-1 truncate text-xs ${
@@ -363,7 +407,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
           </div>
         </div>
 
-        <div className="border-t border-zinc-200 bg-white p-4">
+        <div className="shrink-0 border-t border-zinc-200 bg-white p-4">
           <button
             type="button"
             onClick={handleNewChat}
@@ -376,7 +420,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
       </aside>
 
       {/* Main chat */}
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
+      <main className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F5F5F5]">
         <ChatThread
           className="h-full"
           currentUserId={currentUserId}
