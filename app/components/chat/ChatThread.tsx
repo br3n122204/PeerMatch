@@ -211,7 +211,7 @@ export function ChatThread({
   }
 
   return (
-    <div className={`flex min-h-0 flex-col ${className}`}>
+    <div className={`flex h-full max-h-full min-h-0 flex-col overflow-hidden ${className}`}>
       <header className="shrink-0 min-h-[76px] border-b border-zinc-200 bg-white px-6 py-6">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">

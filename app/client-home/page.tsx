@@ -370,9 +370,17 @@ function ClientHomePageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="flex h-full min-h-[calc(100vh-4rem)] flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+    <div
+      className={`bg-[#F0F7F4] px-4 sm:px-6 lg:px-8 ${
+        activePanel === "messages" ? "h-[100dvh] overflow-hidden py-4 lg:py-4" : "min-h-screen py-6 lg:py-8"
+      }`}
+    >
+      <div
+        className={`mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px] ${
+          activePanel === "messages" ? "h-full min-h-0" : "min-h-[calc(100vh-3rem)]"
+        }`}
+      >
+        <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
           <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
             <Image src="/logo.png" alt="PeerMatch logo" width={32} height={32} className="h-8 w-8 object-contain" />
             <div>
@@ -413,7 +421,7 @@ function ClientHomePageContent() {
             activePanel === "profile" || activePanel === "messages"
               ? "p-4"
               : "p-6 sm:p-8 lg:p-10"
-          }`}
+          } ${activePanel === "messages" ? "overflow-hidden" : ""}`}
         >
           <div
             className={`flex min-h-0 flex-1 flex-col transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
@@ -555,13 +563,13 @@ function ClientHomePageContent() {
             ) : activePanel === "messages" ? (
               <section
                 aria-labelledby="messages-heading"
-                className="flex h-full min-h-[560px] w-full flex-1 flex-col"
+                className="flex h-full max-h-full min-h-0 w-full flex-1 flex-col overflow-hidden"
               >
-                <div className="min-h-0 flex-1">
+                <div className="h-full max-h-full min-h-0 flex-1 overflow-hidden">
                   <ChatLayout
                     currentUserId={meUserId}
                     initialOtherQuery={peerUserId.trim()}
-                    className="!h-full !min-h-[680px] rounded-2xl border border-zinc-200 !bg-white"
+                    className="!h-full !min-h-0 rounded-2xl border border-zinc-200 !bg-white"
                   />
                 </div>
               </section>

@@ -20,12 +20,12 @@ function FreelancerMessagesPageContent() {
   }
 
   return (
-    <main className="flex h-full min-h-[560px] flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_4px_32px_rgba(15,23,42,0.04)]">
-      <div className="min-h-0 flex-1">
+    <main className="flex h-full max-h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_4px_32px_rgba(15,23,42,0.04)]">
+      <div className="h-full max-h-full min-h-0 flex-1 overflow-hidden">
         <ChatLayout
           currentUserId={user.id}
           initialOtherQuery={peerUserId.trim()}
-          className="!h-full !min-h-[680px] rounded-2xl border border-zinc-200 !bg-white"
+          className="!h-full !min-h-0 rounded-2xl border border-zinc-200 !bg-white"
         />
       </div>
     </main>
