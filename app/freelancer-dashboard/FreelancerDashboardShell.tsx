@@ -128,15 +128,27 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
     );
   }
 
+  const isMessagesRoute = pathname === "/freelancer-dashboard/messages";
+
   return (
     <FreelancerUserContext.Provider value={value}>
-      <div className="min-h-screen bg-[#E5F6F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+      <div
+        className={`bg-[#E5F6F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 ${
+          isMessagesRoute ? "h-[100dvh] overflow-hidden" : "min-h-screen"
+        }`}
+      >
+        <div
+          className={`mx-auto w-full max-w-[1600px] grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_320px] ${
+            isMessagesRoute ? "h-full min-h-0" : "min-h-[calc(100vh-3rem)]"
+          } grid`}
+        >
           <div className="min-h-0 lg:row-span-1">
             <FreelancerSidebar />
           </div>
           <div
             className={`min-h-0 transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
+              isMessagesRoute ? "h-full" : ""
+            } ${
               isRouteContentVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-1 scale-[0.995] opacity-0"
             }`}
           >
