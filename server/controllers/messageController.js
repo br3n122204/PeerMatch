@@ -191,8 +191,72 @@ async function markSeen(req, res) {
   }
 }
 
+/**
+ * DELETE /api/messages/:messageId
+ * Deletes a single message if the authenticated user is the sender.
+ */
+async function deleteMessage(req, res) {
+  try {
+    const myId = String(req.user.userId || '');
+    const messageId = String(req.params.messageId || '');
+
+    if (!mongoose.Types.ObjectId.isValid(myId) || !mongoose.Types.ObjectId.isValid(messageId)) {
+      return res.status(400).json({ message: 'Invalid id.' });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found.' });
+    }
+
+    // Only allow the sender to delete their own message
+    if (String(message.senderId) !== myId) {
+      return res.status(403).json({ message: 'You can only delete your own messages.' });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Could not delete message.' });
+  }
+}
+
+/**
+ * DELETE /api/messages/conversation/:otherUserId
+ * Deletes all messages in a conversation between the authenticated user and another user.
+ */
+async function deleteConversation(req, res) {
+  try {
+    const myId = String(req.user.userId || '');
+    const otherUserId = String(req.params.otherUserId || '');
+
+    if (!mongoose.Types.ObjectId.isValid(myId) || !mongoose.Types.ObjectId.isValid(otherUserId)) {
+      return res.status(400).json({ message: 'Invalid user id.' });
+    }
+
+    if (otherUserId === myId) {
+      return res.status(400).json({ message: 'Cannot delete conversation with yourself.' });
+    }
+
+    await Message.deleteMany({
+      $or: [
+        { senderId: myId, receiverId: otherUserId },
+        { senderId: otherUserId, receiverId: myId },
+      ],
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Could not delete conversation.' });
+  }
+}
+
 module.exports = {
   getConversation,
   getConversations,
   markSeen,
+  deleteMessage,
+  deleteConversation,
 };
