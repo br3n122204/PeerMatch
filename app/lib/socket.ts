@@ -110,6 +110,8 @@ export type MessageStatusPayload = {
   receiverId?: string;
   status?: "sent" | "delivered" | "seen";
   seenAt?: string;
+  unsent?: boolean;
+  message?: string;
 };
 
 export function subscribeMessageStatus(handler: (payload: MessageStatusPayload) => void): () => void {

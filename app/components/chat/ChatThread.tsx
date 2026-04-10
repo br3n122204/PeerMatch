@@ -21,6 +21,7 @@ type ChatThreadProps = {
   otherUserId: string;
   otherUserLabel?: string;
   statusText?: string;
+  allowUnsend?: boolean;
   onConversationUpdated?: (otherUserIdResolved: string, messages: ChatMessagePayload[]) => void;
   className?: string;
 };
@@ -35,6 +36,7 @@ export function ChatThread({
   otherUserId,
   otherUserLabel,
   statusText = "Online",
+  allowUnsend = false,
   onConversationUpdated,
   className = "",
 }: ChatThreadProps) {
@@ -213,6 +215,7 @@ export function ChatThread({
                 ...m,
                 ...(payload.status ? { status: payload.status } : {}),
                 ...(payload.seenAt ? { seenAt: payload.seenAt } : {}),
+                ...(payload.unsent ? { unsent: true, message: payload.message || "Message unsent" } : {}),
               }
             : m,
         ),
@@ -288,17 +291,21 @@ export function ChatThread({
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
+      if (!allowUnsend) return;
       if (!messageId || messageId.startsWith("pending-")) return;
-      
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, unsent: true, message: "Message unsent" } : m)),
+      );
+
       try {
         await apiDeleteJson(`/api/messages/${messageId}`);
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Failed to delete message.";
         setSocketError(message);
       }
     },
-    [],
+    [allowUnsend],
   );
 
   const title = useMemo(() => {
@@ -364,6 +371,7 @@ export function ChatThread({
 
         {messages.map((m) => {
           const mine = m.senderId === currentUserId;
+          const isUnsent = Boolean(m.unsent);
           const time = new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
           const statusLabel =
             m.status === "seen" ? "Seen" : m.status === "delivered" ? "Delivered" : "Sent";
@@ -382,7 +390,9 @@ export function ChatThread({
                       mine ? "text-white" : "text-zinc-900"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-5">{m.message}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-5">
+                      {isUnsent ? "Message unsent" : m.message}
+                    </p>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-1">
                     <p
@@ -392,12 +402,12 @@ export function ChatThread({
                     >
                       {time}
                     </p>
-                    {mine ? (
+                    {mine && !isUnsent ? (
                       <p className={`text-[11px] leading-4 ${mine ? "text-white/80" : "text-zinc-500"} font-medium`}>
                         {statusLabel}
                       </p>
                     ) : null}
-                    {mine && !m.id.startsWith("pending-") && (
+                    {allowUnsend && mine && !isUnsent && !m.id.startsWith("pending-") && (
                       <button
                         type="button"
                         onClick={() => deleteMessage(m.id)}

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const { emitMessageUnsent } = require('../socket/socketServer');
 
 /**
  * GET /api/messages/conversation/:otherUserId
@@ -65,10 +66,11 @@ async function getConversation(req, res) {
         id: String(m._id),
         senderId: String(m.senderId),
         receiverId: String(m.receiverId),
-        message: m.message,
+        message: m.unsent ? 'Message unsent' : m.message,
         timestamp: m.timestamp.toISOString(),
         ...(m.status ? { status: m.status } : {}),
         ...(m.seenAt ? { seenAt: m.seenAt.toISOString() } : {}),
+        ...(m.unsent ? { unsent: true } : {}),
       })),
     });
   } catch (error) {
@@ -107,7 +109,11 @@ async function getConversations(req, res) {
       {
         $group: {
           _id: '$otherUserId',
-          lastMessagePreview: { $first: '$message' },
+          lastMessagePreview: {
+            $first: {
+              $cond: [{ $eq: ['$unsent', true] }, 'Message unsent', '$message'],
+            },
+          },
           lastTimestamp: { $first: '$timestamp' },
           lastStatus: { $first: { $ifNull: ['$status', 'sent'] } },
           lastReceiverId: { $first: '$receiverId' },
@@ -194,7 +200,7 @@ async function markSeen(req, res) {
 
 /**
  * DELETE /api/messages/:messageId
- * Deletes a single message if the authenticated user is the sender.
+ * Unsend a single message if the authenticated user is the sender.
  */
 async function deleteMessage(req, res) {
   try {
@@ -215,7 +221,20 @@ async function deleteMessage(req, res) {
       return res.status(403).json({ message: 'You can only delete your own messages.' });
     }
 
-    await Message.findByIdAndDelete(messageId);
+    if (message.unsent) {
+      return res.status(409).json({ message: 'Message already unsent.' });
+    }
+
+    message.unsent = true;
+    message.message = 'Message unsent';
+    await message.save();
+
+    emitMessageUnsent({
+      id: String(message._id),
+      senderId: String(message.senderId),
+      receiverId: String(message.receiverId),
+    });
+
     return res.status(204).send();
   } catch (error) {
     console.error(error);

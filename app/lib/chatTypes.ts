@@ -7,4 +7,5 @@ export type ChatMessagePayload = {
   status?: "sent" | "delivered" | "seen";
   seenAt?: string;
   clientMessageId?: string;
+  unsent?: boolean;
 };

@@ -25,6 +25,7 @@ function FreelancerMessagesPageContent() {
         <ChatLayout
           currentUserId={user.id}
           initialOtherQuery={peerUserId.trim()}
+          allowUnsend
           className="!h-full !min-h-0 rounded-2xl border border-zinc-200 !bg-white"
         />
       </div>
