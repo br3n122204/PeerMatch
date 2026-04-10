@@ -68,6 +68,7 @@ async function getConversation(req, res) {
         message: m.message,
         timestamp: m.timestamp.toISOString(),
         ...(m.status ? { status: m.status } : {}),
+        ...(m.seenAt ? { seenAt: m.seenAt.toISOString() } : {}),
       })),
     });
   } catch (error) {
@@ -181,7 +182,7 @@ async function markSeen(req, res) {
         receiverId: myId,
         $or: [{ status: { $in: ['sent', 'delivered'] } }, { status: { $exists: false } }],
       },
-      { $set: { status: 'seen' } },
+      { $set: { status: 'seen', seenAt: new Date() } },
     );
 
     return res.status(204).send();

@@ -64,6 +64,20 @@ export function sendChatMessage(receiverId: string, message: string): void {
   s.emit("send_message", { receiverId: rid, message: text });
 }
 
+export function sendChatMessageWithClientId(
+  receiverId: string,
+  message: string,
+  clientMessageId: string,
+): void {
+  const s = socket;
+  if (!s?.connected) return;
+  const rid = String(receiverId || "").trim();
+  const text = String(message || "").trim();
+  const cid = String(clientMessageId || "").trim();
+  if (!rid || !text || !cid) return;
+  s.emit("send_message", { receiverId: rid, message: text, clientMessageId: cid });
+}
+
 /**
  * Subscribe to incoming messages. Removes the listener on the returned cleanup.
  * Avoid duplicate handlers by always unsubscribing in useEffect cleanup.
@@ -88,6 +102,44 @@ export function subscribeSocketError(handler: (payload: { message?: string }) =>
   return () => {
     s.off("socket_error", handler);
   };
+}
+
+export type MessageStatusPayload = {
+  id?: string;
+  senderId?: string;
+  receiverId?: string;
+  status?: "sent" | "delivered" | "seen";
+  seenAt?: string;
+};
+
+export function subscribeMessageStatus(handler: (payload: MessageStatusPayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("message_status", handler);
+  return () => {
+    s.off("message_status", handler);
+  };
+}
+
+export function subscribeMessageSent(handler: (payload: ChatMessagePayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("message_sent", handler);
+  return () => {
+    s.off("message_sent", handler);
+  };
+}
+
+export function emitMarkSeen(otherUserId: string): void {
+  const s = socket;
+  if (!s?.connected) return;
+  const id = String(otherUserId || "").trim();
+  if (!id) return;
+  s.emit("mark_seen", { otherUserId: id });
 }
 
 export type PresenceUpdatePayload = {

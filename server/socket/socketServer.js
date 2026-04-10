@@ -99,6 +99,18 @@ function attachSocketServer(httpServer, options) {
             timestamp: m.timestamp.toISOString(),
             status: 'delivered',
           });
+
+          const senderSockets = userIdToSocketIds.get(String(m.senderId));
+          if (senderSockets && senderSockets.size > 0) {
+            for (const sid of senderSockets) {
+              io.to(sid).emit('message_status', {
+                id: String(m._id),
+                senderId: String(m.senderId),
+                receiverId: String(m.receiverId),
+                status: 'delivered',
+              });
+            }
+          }
         });
       })
       .catch((err) => {
@@ -121,6 +133,7 @@ function attachSocketServer(httpServer, options) {
       try {
         const receiverId = String(payload?.receiverId || '').trim();
         const text = String(payload?.message || '').trim();
+        const clientMessageId = String(payload?.clientMessageId || '').trim();
 
         if (!receiverId || !text) {
           socket.emit('socket_error', { message: 'Message and recipient are required.' });
@@ -157,6 +170,10 @@ function attachSocketServer(httpServer, options) {
           timestamp: doc.timestamp.toISOString(),
           status: 'sent',
         };
+        socket.emit('message_sent', {
+          ...out,
+          ...(clientMessageId ? { clientMessageId } : {}),
+        });
 
         const receiverSockets = userIdToSocketIds.get(receiverId);
         if (receiverSockets && receiverSockets.size > 0) {
@@ -164,10 +181,57 @@ function attachSocketServer(httpServer, options) {
           for (const sid of receiverSockets) {
             io.to(sid).emit('receive_message', { ...out, status: 'delivered' });
           }
+          socket.emit('message_status', {
+            id: out.id,
+            senderId: uid,
+            receiverId,
+            status: 'delivered',
+          });
         }
       } catch (err) {
         console.error(err);
         socket.emit('socket_error', { message: 'Failed to send message.' });
+      }
+    });
+
+    socket.on('mark_seen', async (payload) => {
+      try {
+        const otherUserId = String(payload?.otherUserId || '').trim();
+        if (!otherUserId || !mongoose.Types.ObjectId.isValid(otherUserId)) return;
+
+        const docs = await Message.find({
+          senderId: otherUserId,
+          receiverId: uid,
+          $or: [{ status: { $in: ['sent', 'delivered'] } }, { status: { $exists: false } }],
+        })
+          .select('_id senderId receiverId')
+          .lean();
+
+        if (!docs || docs.length === 0) return;
+
+        const seenAt = new Date();
+        const ids = docs.map((d) => d._id);
+        await Message.updateMany(
+          { _id: { $in: ids } },
+          { $set: { status: 'seen', seenAt } },
+        );
+
+        const senderSockets = userIdToSocketIds.get(otherUserId);
+        if (!senderSockets || senderSockets.size === 0) return;
+
+        for (const d of docs) {
+          for (const sid of senderSockets) {
+            io.to(sid).emit('message_status', {
+              id: String(d._id),
+              senderId: String(d.senderId),
+              receiverId: String(d.receiverId),
+              status: 'seen',
+              seenAt: seenAt.toISOString(),
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to mark messages as seen via socket', err);
       }
     });
 
