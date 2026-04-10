@@ -7,8 +7,11 @@ import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api"
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import {
   connectSocket,
+  emitMarkSeen,
   getChatSocket,
-  sendChatMessage,
+  sendChatMessageWithClientId,
+  subscribeMessageSent,
+  subscribeMessageStatus,
   subscribeReceiveMessage,
   subscribeSocketError,
 } from "@/app/lib/socket";
@@ -46,6 +49,7 @@ export function ChatThread({
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const onConversationUpdatedRef = useRef(onConversationUpdated);
+  const lastSeenEmitAtRef = useRef<number>(0);
 
   useEffect(() => {
     onConversationUpdatedRef.current = onConversationUpdated;
@@ -144,8 +148,19 @@ export function ChatThread({
   // Mark conversation messages as seen when the chat is open.
   useEffect(() => {
     if (!canChat) return;
+    const hasUnseenIncoming = messages.some(
+      (m) => m.senderId === resolvedOtherId && m.receiverId === currentUserId && m.status !== "seen",
+    );
+    if (!hasUnseenIncoming) return;
+
+    const now = Date.now();
+    if (now - lastSeenEmitAtRef.current < 350) return;
+    lastSeenEmitAtRef.current = now;
+
+    emitMarkSeen(resolvedOtherId);
+    // Fallback for non-socket receivers / legacy clients.
     void apiPostJson("/api/messages/seen", { otherUserId: resolvedOtherId }).catch(() => undefined);
-  }, [canChat, resolvedOtherId]);
+  }, [canChat, resolvedOtherId, messages, currentUserId]);
 
   useEffect(() => {
     if (!canChat) return;
@@ -156,6 +171,52 @@ export function ChatThread({
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+    });
+    return unsub;
+  }, [canChat, currentUserId, resolvedOtherId]);
+
+  useEffect(() => {
+    if (!canChat) return;
+    const unsub = subscribeMessageSent((msg) => {
+      if (!isSameConversation(msg, currentUserId, resolvedOtherId)) return;
+      const clientMessageId = String(msg.clientMessageId || "").trim();
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        if (clientMessageId) {
+          const idx = prev.findIndex((m) => m.id === clientMessageId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...msg };
+            return next;
+          }
+        }
+        return [...prev, msg];
+      });
+    });
+    return unsub;
+  }, [canChat, currentUserId, resolvedOtherId]);
+
+  useEffect(() => {
+    if (!canChat) return;
+    const unsub = subscribeMessageStatus((payload) => {
+      if (!payload?.id) return;
+      const senderId = String(payload.senderId || "").trim();
+      const receiverId = String(payload.receiverId || "").trim();
+      if (!senderId || !receiverId) return;
+      const pair = new Set([senderId, receiverId]);
+      if (!pair.has(currentUserId) || !pair.has(resolvedOtherId) || pair.size !== 2) return;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === payload.id
+            ? {
+                ...m,
+                ...(payload.status ? { status: payload.status } : {}),
+                ...(payload.seenAt ? { seenAt: payload.seenAt } : {}),
+              }
+            : m,
+        ),
+      );
     });
     return unsub;
   }, [canChat, currentUserId, resolvedOtherId]);
@@ -208,15 +269,18 @@ export function ChatThread({
       }
 
       setSocketError(null);
+      const clientMessageId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const pending: ChatMessagePayload = {
-        id: `pending-${Date.now()}`,
+        id: clientMessageId,
         senderId: currentUserId,
         receiverId: resolvedOtherId,
         message: text,
         timestamp: new Date().toISOString(),
+        status: "sent",
+        clientMessageId,
       };
       setMessages((prev) => [...prev, pending]);
-      sendChatMessage(resolvedOtherId, text);
+      sendChatMessageWithClientId(resolvedOtherId, text, clientMessageId);
       setDraft("");
     },
     [canChat, currentUserId, draft, resolvedOtherId],
@@ -301,6 +365,8 @@ export function ChatThread({
         {messages.map((m) => {
           const mine = m.senderId === currentUserId;
           const time = new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const statusLabel =
+            m.status === "seen" ? "Seen" : m.status === "delivered" ? "Delivered" : "Sent";
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
@@ -326,6 +392,11 @@ export function ChatThread({
                     >
                       {time}
                     </p>
+                    {mine ? (
+                      <p className={`text-[11px] leading-4 ${mine ? "text-white/80" : "text-zinc-500"} font-medium`}>
+                        {statusLabel}
+                      </p>
+                    ) : null}
                     {mine && !m.id.startsWith("pending-") && (
                       <button
                         type="button"
