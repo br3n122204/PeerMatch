@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { MoreVertical, Search, Trash2 } from "lucide-react";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
-import { apiGetJson } from "@/app/lib/api";
+import { apiDeleteJson, apiGetJson } from "@/app/lib/api";
 import { connectSocket, subscribePresenceSnapshot, subscribePresenceUpdate, subscribeReceiveMessage } from "@/app/lib/socket";
 import type { UserSearchResult } from "@/app/lib/userSearch";
 import { searchUsersByQuery } from "@/app/lib/userSearch";
@@ -63,6 +63,9 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUserName, setActiveUserName] = useState<string>("");
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+
+  // Conversation delete menu state
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   const userNameByIdRef = useRef<Record<string, string>>({});
   const lastSidebarUpdateByUserIdRef = useRef<Record<string, { lastId?: string; lastTimestamp?: string }>>({});
@@ -148,6 +151,21 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
+
+  // Close conversation menu on outside click.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (menuOpenId === null) return;
+      const target = e.target as Node;
+      // Check if the click is not on a menu button or menu content
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest('[data-menu-id]') && !target.closest('[data-menu-content]')) {
+        setMenuOpenId(null);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpenId]);
 
   // Load persisted conversations from MongoDB messages.
   useEffect(() => {
@@ -290,6 +308,23 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
     setSearchFocused(false);
   };
 
+  const handleDeleteConversation = async (otherUserId: string) => {
+    try {
+      await apiDeleteJson(`/api/messages/conversation/${otherUserId}`);
+      setConversations((prev) => prev.filter((c) => c.otherUserId !== otherUserId));
+      
+      // If the deleted conversation was active, clear the active chat
+      if (activeUserId === otherUserId) {
+        setActiveUserId("");
+        setActiveUserName("");
+      }
+      
+      setMenuOpenId(null);
+    } catch (err) {
+      console.error("Failed to delete conversation:", err);
+    }
+  };
+
   return (
     <div className={`flex h-full max-h-full min-h-0 w-full min-w-0 overflow-hidden bg-[#F5F5F5] ${className}`}>
       {/* Left sidebar */}
@@ -360,42 +395,73 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
           <div className="space-y-3">
             {filteredConversations.map((c) => {
               const active = c.otherUserId === activeUserId;
+              const isMenuOpen = menuOpenId === c.otherUserId;
               return (
-                <button
-                  key={c.otherUserId}
-                  type="button"
-                  onClick={() => handleSelectConversationFromSidebar(c)}
-                  className={`w-full rounded-xl border border-transparent px-2 py-2 text-left transition ${
-                    active ? "bg-[#FFF2EB]" : "hover:bg-zinc-50"
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF6B35] text-xs font-semibold text-white">
-                      {getInitials(c.otherName)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
+                <div key={c.otherUserId} className="relative">
+                  <div
+                    onClick={() => handleSelectConversationFromSidebar(c)}
+                    className={`w-full rounded-xl border border-transparent px-2 py-2 text-left transition cursor-pointer ${
+                      active ? "bg-[#FFF2EB]" : "hover:bg-zinc-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF6B35] text-xs font-semibold text-white">
+                        {getInitials(c.otherName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p
+                            className={`truncate text-sm ${
+                              c.hasUnread ? "font-bold" : "font-semibold"
+                            } text-zinc-900 leading-tight`}
+                          >
+                            {c.otherName}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <p className="text-[11px] font-medium leading-tight text-zinc-500">
+                              {formatTimeAgo(c.lastTimestamp || undefined)}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenId(isMenuOpen ? null : c.otherUserId);
+                              }}
+                              className="p-1 rounded hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 transition"
+                              aria-label="Conversation options"
+                              data-menu-id={c.otherUserId}
+                            >
+                              <MoreVertical className="h-4 w-4" strokeWidth={1.8} />
+                            </button>
+                          </div>
+                        </div>
                         <p
-                          className={`truncate text-sm ${
-                            c.hasUnread ? "font-bold" : "font-semibold"
-                          } text-zinc-900 leading-tight`}
+                          className={`mt-1 truncate text-xs ${
+                            c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
+                          } leading-snug`}
                         >
-                          {c.otherName}
-                        </p>
-                        <p className="text-[11px] font-medium leading-tight text-zinc-500">
-                          {formatTimeAgo(c.lastTimestamp || undefined)}
+                          {c.lastMessagePreview || ""}
                         </p>
                       </div>
-                      <p
-                        className={`mt-1 truncate text-xs ${
-                          c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
-                        } leading-snug`}
-                      >
-                        {c.lastMessagePreview || ""}
-                      </p>
                     </div>
                   </div>
-                </button>
+                  
+                  {isMenuOpen && (
+                    <div
+                      className="absolute right-0 top-0 z-10 mt-1 w-40 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg"
+                      data-menu-content
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConversation(c.otherUserId)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                        Delete Conversation
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
 

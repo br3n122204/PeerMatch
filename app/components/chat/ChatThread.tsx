@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Info, Phone, Send, Video } from "lucide-react";
-import { ApiError, apiGetJson, apiPostJson } from "@/app/lib/api";
+import { Info, Phone, Send, Trash2, Video } from "lucide-react";
+import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import {
   connectSocket,
@@ -195,6 +195,21 @@ export function ChatThread({
     [canChat, currentUserId, draft, resolvedOtherId],
   );
 
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!messageId || messageId.startsWith("pending-")) return;
+      
+      try {
+        await apiDeleteJson(`/api/messages/${messageId}`);
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Failed to delete message.";
+        setSocketError(message);
+      }
+    },
+    [],
+  );
+
   const title = useMemo(() => {
     if (!trimmedOther) return "Select a conversation";
     if (otherUserLabel?.trim()) return otherUserLabel.trim();
@@ -276,13 +291,27 @@ export function ChatThread({
                   >
                     <p className="whitespace-pre-wrap break-words text-sm leading-5">{m.message}</p>
                   </div>
-                  <p
-                    className={`mt-1 text-[11px] leading-4 ${
-                      mine ? "text-white/80" : "text-zinc-500"
-                    } font-medium`}
-                  >
-                    {time}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <p
+                      className={`text-[11px] leading-4 ${
+                        mine ? "text-white/80" : "text-zinc-500"
+                      } font-medium`}
+                    >
+                      {time}
+                    </p>
+                    {mine && !m.id.startsWith("pending-") && (
+                      <button
+                        type="button"
+                        onClick={() => deleteMessage(m.id)}
+                        className={`p-1 rounded hover:bg-zinc-200/20 transition ${
+                          mine ? "text-white/70 hover:text-white" : "text-zinc-400 hover:text-zinc-600"
+                        }`}
+                        aria-label="Delete message"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

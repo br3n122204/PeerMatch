@@ -16,4 +16,12 @@ router.post('/seen', authMiddleware, (req, res) =>
   void messageController.markSeen(req, res),
 );
 
+router.delete('/:messageId', authMiddleware, (req, res) =>
+  void messageController.deleteMessage(req, res),
+);
+
+router.delete('/conversation/:otherUserId', authMiddleware, (req, res) =>
+  void messageController.deleteConversation(req, res),
+);
+
 module.exports = router;
