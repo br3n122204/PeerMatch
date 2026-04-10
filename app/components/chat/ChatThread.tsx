@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Info, Phone, Send, Trash2, Video } from "lucide-react";
+import { Info, Phone, Send, Smile, Trash2, Video } from "lucide-react";
+import Picker from "emoji-picker-react";
 import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import {
@@ -40,7 +41,10 @@ export function ChatThread({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [resolvingUser, setResolvingUser] = useState(false);
   const [resolvedOtherId, setResolvedOtherId] = useState<string>("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const onConversationUpdatedRef = useRef(onConversationUpdated);
 
   useEffect(() => {
@@ -162,6 +166,29 @@ export function ChatThread({
     });
     return unsub;
   }, []);
+
+  const handleEmojiClick = (emojiData: { emoji: string }) => {
+    setDraft((prev) => prev + emojiData.emoji);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!showEmojiPicker) return;
+      
+      const target = event.target as Node;
+      const pickerElement = emojiPickerRef.current;
+      const buttonElement = emojiButtonRef.current;
+      
+      // Don't close if clicking inside the picker or on the emoji button
+      if (pickerElement?.contains(target) || buttonElement?.contains(target)) {
+        return;
+      }
+      
+      setShowEmojiPicker(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
 
   useEffect(() => {
     scrollToBottom();
@@ -320,23 +347,45 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={send} className="shrink-0 flex items-center gap-2 border-t border-zinc-200 bg-white px-6 py-4">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Type a message…"
-          className="h-10 min-w-0 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm leading-5 text-zinc-800 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
-          disabled={!canChat}
-        />
-        <button
-          type="submit"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-zinc-300"
-          aria-label="Send message"
-          disabled={!canChat || !draft.trim()}
-        >
-          <Send className="h-4 w-4" strokeWidth={2} />
-        </button>
+      <form onSubmit={send} className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              ref={emojiButtonRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEmojiPicker(!showEmojiPicker);
+              }}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              aria-label="Add emoji"
+              disabled={!canChat}
+            >
+              <Smile className="h-5 w-5" strokeWidth={1.8} />
+            </button>
+            {showEmojiPicker && (
+              <div ref={emojiPickerRef} className="absolute bottom-full left-0 mb-2 z-20">
+                <Picker onEmojiClick={handleEmojiClick} lazyLoadEmojis />
+              </div>
+            )}
+          </div>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type a message…"
+            className="h-10 min-w-0 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm leading-5 text-zinc-800 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
+            disabled={!canChat}
+          />
+          <button
+            type="submit"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-zinc-300"
+            aria-label="Send message"
+            disabled={!canChat || !draft.trim()}
+          >
+            <Send className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
       </form>
     </div>
   );
