@@ -1,13 +1,17 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Info, Phone, Send, Trash2, Video } from "lucide-react";
+import { Info, Phone, Send, Smile, Trash2, Video } from "lucide-react";
+import Picker from "emoji-picker-react";
 import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import {
   connectSocket,
+  emitMarkSeen,
   getChatSocket,
-  sendChatMessage,
+  sendChatMessageWithClientId,
+  subscribeMessageSent,
+  subscribeMessageStatus,
   subscribeReceiveMessage,
   subscribeSocketError,
 } from "@/app/lib/socket";
@@ -17,6 +21,7 @@ type ChatThreadProps = {
   otherUserId: string;
   otherUserLabel?: string;
   statusText?: string;
+  allowUnsend?: boolean;
   onConversationUpdated?: (otherUserIdResolved: string, messages: ChatMessagePayload[]) => void;
   className?: string;
 };
@@ -31,6 +36,7 @@ export function ChatThread({
   otherUserId,
   otherUserLabel,
   statusText = "Online",
+  allowUnsend = false,
   onConversationUpdated,
   className = "",
 }: ChatThreadProps) {
@@ -40,8 +46,12 @@ export function ChatThread({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [resolvingUser, setResolvingUser] = useState(false);
   const [resolvedOtherId, setResolvedOtherId] = useState<string>("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const onConversationUpdatedRef = useRef(onConversationUpdated);
+  const lastSeenEmitAtRef = useRef<number>(0);
 
   useEffect(() => {
     onConversationUpdatedRef.current = onConversationUpdated;
@@ -140,8 +150,19 @@ export function ChatThread({
   // Mark conversation messages as seen when the chat is open.
   useEffect(() => {
     if (!canChat) return;
+    const hasUnseenIncoming = messages.some(
+      (m) => m.senderId === resolvedOtherId && m.receiverId === currentUserId && m.status !== "seen",
+    );
+    if (!hasUnseenIncoming) return;
+
+    const now = Date.now();
+    if (now - lastSeenEmitAtRef.current < 350) return;
+    lastSeenEmitAtRef.current = now;
+
+    emitMarkSeen(resolvedOtherId);
+    // Fallback for non-socket receivers / legacy clients.
     void apiPostJson("/api/messages/seen", { otherUserId: resolvedOtherId }).catch(() => undefined);
-  }, [canChat, resolvedOtherId]);
+  }, [canChat, resolvedOtherId, messages, currentUserId]);
 
   useEffect(() => {
     if (!canChat) return;
@@ -157,11 +178,81 @@ export function ChatThread({
   }, [canChat, currentUserId, resolvedOtherId]);
 
   useEffect(() => {
+    if (!canChat) return;
+    const unsub = subscribeMessageSent((msg) => {
+      if (!isSameConversation(msg, currentUserId, resolvedOtherId)) return;
+      const clientMessageId = String(msg.clientMessageId || "").trim();
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        if (clientMessageId) {
+          const idx = prev.findIndex((m) => m.id === clientMessageId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...msg };
+            return next;
+          }
+        }
+        return [...prev, msg];
+      });
+    });
+    return unsub;
+  }, [canChat, currentUserId, resolvedOtherId]);
+
+  useEffect(() => {
+    if (!canChat) return;
+    const unsub = subscribeMessageStatus((payload) => {
+      if (!payload?.id) return;
+      const senderId = String(payload.senderId || "").trim();
+      const receiverId = String(payload.receiverId || "").trim();
+      if (!senderId || !receiverId) return;
+      const pair = new Set([senderId, receiverId]);
+      if (!pair.has(currentUserId) || !pair.has(resolvedOtherId) || pair.size !== 2) return;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === payload.id
+            ? {
+                ...m,
+                ...(payload.status ? { status: payload.status } : {}),
+                ...(payload.seenAt ? { seenAt: payload.seenAt } : {}),
+                ...(payload.unsent ? { unsent: true, message: payload.message || "Message unsent" } : {}),
+              }
+            : m,
+        ),
+      );
+    });
+    return unsub;
+  }, [canChat, currentUserId, resolvedOtherId]);
+
+  useEffect(() => {
     const unsub = subscribeSocketError((p) => {
       setSocketError(typeof p?.message === "string" ? p.message : "Messaging error.");
     });
     return unsub;
   }, []);
+
+  const handleEmojiClick = (emojiData: { emoji: string }) => {
+    setDraft((prev) => prev + emojiData.emoji);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!showEmojiPicker) return;
+      
+      const target = event.target as Node;
+      const pickerElement = emojiPickerRef.current;
+      const buttonElement = emojiButtonRef.current;
+      
+      // Don't close if clicking inside the picker or on the emoji button
+      if (pickerElement?.contains(target) || buttonElement?.contains(target)) {
+        return;
+      }
+      
+      setShowEmojiPicker(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
 
   useEffect(() => {
     scrollToBottom();
@@ -181,15 +272,18 @@ export function ChatThread({
       }
 
       setSocketError(null);
+      const clientMessageId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const pending: ChatMessagePayload = {
-        id: `pending-${Date.now()}`,
+        id: clientMessageId,
         senderId: currentUserId,
         receiverId: resolvedOtherId,
         message: text,
         timestamp: new Date().toISOString(),
+        status: "sent",
+        clientMessageId,
       };
       setMessages((prev) => [...prev, pending]);
-      sendChatMessage(resolvedOtherId, text);
+      sendChatMessageWithClientId(resolvedOtherId, text, clientMessageId);
       setDraft("");
     },
     [canChat, currentUserId, draft, resolvedOtherId],
@@ -197,17 +291,21 @@ export function ChatThread({
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
+      if (!allowUnsend) return;
       if (!messageId || messageId.startsWith("pending-")) return;
-      
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, unsent: true, message: "Message unsent" } : m)),
+      );
+
       try {
         await apiDeleteJson(`/api/messages/${messageId}`);
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Failed to delete message.";
         setSocketError(message);
       }
     },
-    [],
+    [allowUnsend],
   );
 
   const title = useMemo(() => {
@@ -273,7 +371,10 @@ export function ChatThread({
 
         {messages.map((m) => {
           const mine = m.senderId === currentUserId;
+          const isUnsent = Boolean(m.unsent);
           const time = new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const statusLabel =
+            m.status === "seen" ? "Seen" : m.status === "delivered" ? "Delivered" : "Sent";
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
@@ -289,7 +390,9 @@ export function ChatThread({
                       mine ? "text-white" : "text-zinc-900"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-5">{m.message}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-5">
+                      {isUnsent ? "Message unsent" : m.message}
+                    </p>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-1">
                     <p
@@ -299,7 +402,12 @@ export function ChatThread({
                     >
                       {time}
                     </p>
-                    {mine && !m.id.startsWith("pending-") && (
+                    {mine && !isUnsent ? (
+                      <p className={`text-[11px] leading-4 ${mine ? "text-white/80" : "text-zinc-500"} font-medium`}>
+                        {statusLabel}
+                      </p>
+                    ) : null}
+                    {allowUnsend && mine && !isUnsent && !m.id.startsWith("pending-") && (
                       <button
                         type="button"
                         onClick={() => deleteMessage(m.id)}
@@ -320,23 +428,45 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={send} className="shrink-0 flex items-center gap-2 border-t border-zinc-200 bg-white px-6 py-4">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Type a message…"
-          className="h-10 min-w-0 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm leading-5 text-zinc-800 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
-          disabled={!canChat}
-        />
-        <button
-          type="submit"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-zinc-300"
-          aria-label="Send message"
-          disabled={!canChat || !draft.trim()}
-        >
-          <Send className="h-4 w-4" strokeWidth={2} />
-        </button>
+      <form onSubmit={send} className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              ref={emojiButtonRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEmojiPicker(!showEmojiPicker);
+              }}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              aria-label="Add emoji"
+              disabled={!canChat}
+            >
+              <Smile className="h-5 w-5" strokeWidth={1.8} />
+            </button>
+            {showEmojiPicker && (
+              <div ref={emojiPickerRef} className="absolute bottom-full left-0 mb-2 z-20">
+                <Picker onEmojiClick={handleEmojiClick} lazyLoadEmojis />
+              </div>
+            )}
+          </div>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type a message…"
+            className="h-10 min-w-0 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm leading-5 text-zinc-800 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-[#4DD2AC]/30"
+            disabled={!canChat}
+          />
+          <button
+            type="submit"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4DD2AC] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-zinc-300"
+            aria-label="Send message"
+            disabled={!canChat || !draft.trim()}
+          >
+            <Send className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MoreVertical, Search, Trash2 } from "lucide-react";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
 import { apiDeleteJson, apiGetJson } from "@/app/lib/api";
-import { connectSocket, subscribePresenceSnapshot, subscribePresenceUpdate, subscribeReceiveMessage } from "@/app/lib/socket";
+import {
+  connectSocket,
+  subscribeMessageStatus,
+  subscribePresenceSnapshot,
+  subscribePresenceUpdate,
+  subscribeReceiveMessage,
+} from "@/app/lib/socket";
 import type { UserSearchResult } from "@/app/lib/userSearch";
 import { searchUsersByQuery } from "@/app/lib/userSearch";
 import { ChatThread } from "@/app/components/chat/ChatThread";
@@ -44,10 +50,16 @@ function formatTimeAgo(iso?: string) {
 type ChatLayoutProps = {
   currentUserId: string;
   initialOtherQuery?: string; // ObjectId or name fragment (from ?with=)
+  allowUnsend?: boolean;
   className?: string;
 };
 
-export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }: ChatLayoutProps) {
+export function ChatLayout({
+  currentUserId,
+  initialOtherQuery,
+  allowUnsend = false,
+  className = "",
+}: ChatLayoutProps) {
   const [searchText, setSearchText] = useState<string>("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -250,7 +262,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
         const nextItem: Conversation = {
           otherUserId: otherId,
           otherName: existing?.otherName || knownName,
-          lastMessagePreview: msg.message || "",
+          lastMessagePreview: msg.unsent ? "Message unsent" : msg.message || "",
           lastTimestamp: msg.timestamp || null,
           hasUnread,
         };
@@ -269,6 +281,31 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
 
     return unsub;
   }, [currentUserId, activeUserId, activeUserName]);
+
+  useEffect(() => {
+    if (!allowUnsend) return;
+    if (!currentUserId) return;
+    const unsub = subscribeMessageStatus((payload) => {
+      if (!payload?.id || !payload.unsent) return;
+      const senderId = String(payload.senderId || "").trim();
+      const receiverId = String(payload.receiverId || "").trim();
+      if (!senderId || !receiverId) return;
+      if (senderId !== currentUserId && receiverId !== currentUserId) return;
+      const otherId = senderId === currentUserId ? receiverId : senderId;
+
+      setConversations((prevList) =>
+        prevList.map((c) =>
+          c.otherUserId === otherId
+            ? {
+                ...c,
+                lastMessagePreview: "Message unsent",
+              }
+            : c,
+        ),
+      );
+    });
+    return unsub;
+  }, [allowUnsend, currentUserId]);
   const filteredConversations = useMemo(() => {
     return conversations;
   }, [conversations]);
@@ -493,6 +530,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
           otherUserId={activeUserId}
           otherUserLabel={activeUserName}
           statusText={activeUserConnected ? "Online" : "Offline"}
+          allowUnsend={allowUnsend}
           onConversationUpdated={(otherId, msgs: ChatMessagePayload[]) => {
             if (!otherId) return;
             if (!msgs || msgs.length === 0) return; // IMPORTANT: do not persist empty/temporary chats
@@ -512,7 +550,7 @@ export function ChatLayout({ currentUserId, initialOtherQuery, className = "" }:
               const nextItem: Conversation = {
                 otherUserId: otherId,
                 otherName: name,
-                lastMessagePreview: last.message || "",
+                lastMessagePreview: last.unsent ? "Message unsent" : last.message || "",
                 lastTimestamp: last.timestamp || null,
               };
 
