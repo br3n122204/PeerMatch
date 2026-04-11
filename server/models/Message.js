@@ -22,6 +22,7 @@ const messageSchema = new mongoose.Schema({
     index: true,
   },
   seenAt: { type: Date, default: null, index: true },
+  unsent: { type: Boolean, default: false, index: true },
 });
 
 messageSchema.index({ senderId: 1, receiverId: 1, timestamp: -1 });

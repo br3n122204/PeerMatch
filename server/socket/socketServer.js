@@ -7,6 +7,8 @@ const User = require('../models/User');
 
 /** @type {Map<string, Set<string>>} userId → socket ids */
 const userIdToSocketIds = new Map();
+/** @type {import('socket.io').Server | null} */
+let ioInstance = null;
 
 function markUserSocketConnected(userId, socketId) {
   const existing = userIdToSocketIds.get(userId);
@@ -52,6 +54,7 @@ function attachSocketServer(httpServer, options) {
       credentials: true,
     },
   });
+  ioInstance = io;
 
   io.use((socket, next) => {
     const token = getTokenFromHandshake(socket.handshake);
@@ -98,6 +101,7 @@ function attachSocketServer(httpServer, options) {
             message: m.message,
             timestamp: m.timestamp.toISOString(),
             status: 'delivered',
+            unsent: Boolean(m.unsent),
           });
 
           const senderSockets = userIdToSocketIds.get(String(m.senderId));
@@ -169,6 +173,7 @@ function attachSocketServer(httpServer, options) {
           message: text,
           timestamp: doc.timestamp.toISOString(),
           status: 'sent',
+          unsent: Boolean(doc.unsent),
         };
         socket.emit('message_sent', {
           ...out,
@@ -246,6 +251,37 @@ function attachSocketServer(httpServer, options) {
   return io;
 }
 
+function emitMessageUnsent(payload) {
+  if (!ioInstance) return;
+  const senderId = String(payload?.senderId || '').trim();
+  const receiverId = String(payload?.receiverId || '').trim();
+  const messageId = String(payload?.id || '').trim();
+  if (!senderId || !receiverId || !messageId) return;
+
+  const out = {
+    id: messageId,
+    senderId,
+    receiverId,
+    unsent: true,
+    message: 'Message unsent',
+  };
+
+  const senderSockets = userIdToSocketIds.get(senderId);
+  if (senderSockets && senderSockets.size > 0) {
+    for (const sid of senderSockets) {
+      ioInstance.to(sid).emit('message_status', out);
+    }
+  }
+
+  const receiverSockets = userIdToSocketIds.get(receiverId);
+  if (receiverSockets && receiverSockets.size > 0) {
+    for (const sid of receiverSockets) {
+      ioInstance.to(sid).emit('message_status', out);
+    }
+  }
+}
+
 module.exports = {
   attachSocketServer,
+  emitMessageUnsent,
 };
