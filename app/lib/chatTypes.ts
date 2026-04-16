@@ -1,3 +1,8 @@
+export type ChatMessageReaction = {
+  userId: string;
+  emoji: string;
+};
+
 export type ChatMessagePayload = {
   id: string;
   senderId: string;
@@ -8,4 +13,10 @@ export type ChatMessagePayload = {
   seenAt?: string;
   clientMessageId?: string;
   unsent?: boolean;
+  deletedForEveryone?: boolean;
+  tombstoneText?: string;
+  viewerRemoved?: boolean;
+  reactions?: ChatMessageReaction[];
+  replyTo?: { id: string; preview: string };
+  forwardedFromPreview?: string;
 };

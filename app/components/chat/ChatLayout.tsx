@@ -262,7 +262,7 @@ export function ChatLayout({
         const nextItem: Conversation = {
           otherUserId: otherId,
           otherName: existing?.otherName || knownName,
-          lastMessagePreview: msg.unsent ? "Message unsent" : msg.message || "",
+          lastMessagePreview: msg.unsent ? "Deleted message" : msg.message || "",
           lastTimestamp: msg.timestamp || null,
           hasUnread,
         };
@@ -298,7 +298,7 @@ export function ChatLayout({
           c.otherUserId === otherId
             ? {
                 ...c,
-                lastMessagePreview: "Message unsent",
+                lastMessagePreview: "Deleted message",
               }
             : c,
         ),
@@ -550,7 +550,7 @@ export function ChatLayout({
               const nextItem: Conversation = {
                 otherUserId: otherId,
                 otherName: name,
-                lastMessagePreview: last.unsent ? "Message unsent" : last.message || "",
+                lastMessagePreview: last.unsent ? "Deleted message" : last.message || "",
                 lastTimestamp: last.timestamp || null,
               };
 
