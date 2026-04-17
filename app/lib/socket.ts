@@ -200,10 +200,12 @@ export function emitMarkSeen(otherUserId: string): void {
 export type PresenceUpdatePayload = {
   userId?: string;
   online?: boolean;
+  lastActiveAt?: string;
 };
 
 export type PresenceSnapshotPayload = {
   onlineUserIds?: string[];
+  lastActiveByUserId?: Record<string, string>;
 };
 
 export function subscribePresenceUpdate(handler: (payload: PresenceUpdatePayload) => void): () => void {

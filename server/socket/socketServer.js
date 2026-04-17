@@ -8,6 +8,8 @@ const { toChatMessageDto } = require('../utils/chatMessageDto');
 
 /** @type {Map<string, Set<string>>} userId → socket ids */
 const userIdToSocketIds = new Map();
+/** @type {Map<string, string>} userId -> ISO timestamp when last seen offline */
+const userIdToLastActiveAt = new Map();
 /** @type {import('socket.io').Server | null} */
 let ioInstance = null;
 
@@ -73,11 +75,13 @@ function attachSocketServer(httpServer, options) {
 
     const becameOnline = markUserSocketConnected(uid, socket.id);
     if (becameOnline) {
+      userIdToLastActiveAt.delete(uid);
       io.emit('presence_update', { userId: uid, online: true });
     }
 
     socket.emit('presence_snapshot', {
       onlineUserIds: Array.from(userIdToSocketIds.keys()),
+      lastActiveByUserId: Object.fromEntries(userIdToLastActiveAt.entries()),
     });
 
     // Deliver any previously-sent messages to this user (offline → online).
@@ -127,6 +131,7 @@ function attachSocketServer(httpServer, options) {
       }
       const justOnline = markUserSocketConnected(uid, socket.id);
       if (justOnline) {
+        userIdToLastActiveAt.delete(uid);
         io.emit('presence_update', { userId: uid, online: true });
       }
     });
@@ -265,7 +270,9 @@ function attachSocketServer(httpServer, options) {
     socket.on('disconnect', () => {
       const becameOffline = markUserSocketDisconnected(uid, socket.id);
       if (becameOffline) {
-        io.emit('presence_update', { userId: uid, online: false });
+        const lastActiveAt = new Date().toISOString();
+        userIdToLastActiveAt.set(uid, lastActiveAt);
+        io.emit('presence_update', { userId: uid, online: false, lastActiveAt });
       }
     });
   });
