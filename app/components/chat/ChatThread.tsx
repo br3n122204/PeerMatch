@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Info, Phone, Send, Smile, Video, X } from "lucide-react";
+import { Paperclip, Send, Smile, X } from "lucide-react";
 import Picker from "emoji-picker-react";
 import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api";
 import type { ChatMessagePayload } from "@/app/lib/chatTypes";
@@ -612,7 +612,7 @@ export function ChatThread({
   return (
     <div className={`flex h-full max-h-full min-h-0 flex-col overflow-hidden ${className}`}>
       <header className="shrink-0 min-h-[76px] border-b border-zinc-200 bg-white px-6 py-6">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           <div className="min-w-0">
             <p className="truncate leading-tight text-sm font-semibold text-zinc-900">{title}</p>
             <p
@@ -622,17 +622,6 @@ export function ChatThread({
             >
               {canChat ? statusText : ""}
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Call">
-              <Phone className="h-4 w-4" strokeWidth={1.8} />
-            </button>
-            <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Video">
-              <Video className="h-4 w-4" strokeWidth={1.8} />
-            </button>
-            <button type="button" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Info">
-              <Info className="h-4 w-4" strokeWidth={1.8} />
-            </button>
           </div>
         </div>
       </header>
