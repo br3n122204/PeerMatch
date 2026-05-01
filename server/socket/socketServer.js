@@ -4,9 +4,12 @@ const mongoose = require('mongoose');
 const { COOKIE_NAME, verifyAccessToken } = require('../middleware/auth');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const { toChatMessageDto } = require('../utils/chatMessageDto');
 
 /** @type {Map<string, Set<string>>} userId → socket ids */
 const userIdToSocketIds = new Map();
+/** @type {Map<string, string>} userId -> ISO timestamp when last seen offline */
+const userIdToLastActiveAt = new Map();
 /** @type {import('socket.io').Server | null} */
 let ioInstance = null;
 
@@ -72,17 +75,20 @@ function attachSocketServer(httpServer, options) {
 
     const becameOnline = markUserSocketConnected(uid, socket.id);
     if (becameOnline) {
+      userIdToLastActiveAt.delete(uid);
       io.emit('presence_update', { userId: uid, online: true });
     }
 
     socket.emit('presence_snapshot', {
       onlineUserIds: Array.from(userIdToSocketIds.keys()),
+      lastActiveByUserId: Object.fromEntries(userIdToLastActiveAt.entries()),
     });
 
     // Deliver any previously-sent messages to this user (offline → online).
     // We mark them as delivered once we emit them.
     Message.find({
       receiverId: uid,
+      vanishedForUsers: { $nin: [new mongoose.Types.ObjectId(uid)] },
       $or: [{ status: 'sent' }, { status: { $exists: false } }],
     })
       .sort({ timestamp: 1 })
@@ -94,14 +100,10 @@ function attachSocketServer(httpServer, options) {
         await Message.updateMany({ _id: { $in: ids } }, { $set: { status: 'delivered' } });
 
         unread.forEach((m) => {
+          const dto = toChatMessageDto(m, uid);
           socket.emit('receive_message', {
-            id: String(m._id),
-            senderId: String(m.senderId),
-            receiverId: String(m.receiverId),
-            message: m.message,
-            timestamp: m.timestamp.toISOString(),
+            ...dto,
             status: 'delivered',
-            unsent: Boolean(m.unsent),
           });
 
           const senderSockets = userIdToSocketIds.get(String(m.senderId));
@@ -129,6 +131,7 @@ function attachSocketServer(httpServer, options) {
       }
       const justOnline = markUserSocketConnected(uid, socket.id);
       if (justOnline) {
+        userIdToLastActiveAt.delete(uid);
         io.emit('presence_update', { userId: uid, online: true });
       }
     });
@@ -138,6 +141,8 @@ function attachSocketServer(httpServer, options) {
         const receiverId = String(payload?.receiverId || '').trim();
         const text = String(payload?.message || '').trim();
         const clientMessageId = String(payload?.clientMessageId || '').trim();
+        const replyToMessageIdRaw = String(payload?.replyToMessageId || '').trim();
+        const forwardedFromPreview = String(payload?.forwardedFromPreview || '').trim().slice(0, 500);
 
         if (!receiverId || !text) {
           socket.emit('socket_error', { message: 'Message and recipient are required.' });
@@ -158,36 +163,58 @@ function attachSocketServer(httpServer, options) {
           return;
         }
 
-        const doc = await Message.create({
+        let replyToMessageId = null;
+        let replyPreview = '';
+        if (replyToMessageIdRaw && mongoose.Types.ObjectId.isValid(replyToMessageIdRaw)) {
+          const parent = await Message.findById(replyToMessageIdRaw).lean();
+          if (parent) {
+            const ps = String(parent.senderId);
+            const pr = String(parent.receiverId);
+            const inThread =
+              (ps === uid && pr === receiverId) || (ps === receiverId && pr === uid);
+            if (inThread) {
+              replyToMessageId = parent._id;
+              replyPreview = parent.unsent
+                ? 'Message'
+                : String(parent.message || '').trim().slice(0, 280);
+            }
+          }
+        }
+
+        const createPayload = {
           senderId: uid,
           receiverId,
           message: text,
           timestamp: new Date(),
           status: 'sent',
-        });
-
-        const out = {
-          id: String(doc._id),
-          senderId: uid,
-          receiverId,
-          message: text,
-          timestamp: doc.timestamp.toISOString(),
-          status: 'sent',
-          unsent: Boolean(doc.unsent),
         };
+        if (replyToMessageId) {
+          createPayload.replyToMessageId = replyToMessageId;
+          createPayload.replyPreview = replyPreview || ' ';
+        }
+        if (forwardedFromPreview) {
+          createPayload.forwardedFromPreview = forwardedFromPreview;
+        }
+
+        const doc = await Message.create(createPayload);
+        const fresh = await Message.findById(doc._id).lean();
+
+        const outSender = { ...toChatMessageDto(fresh, uid), status: 'sent' };
         socket.emit('message_sent', {
-          ...out,
+          ...outSender,
           ...(clientMessageId ? { clientMessageId } : {}),
         });
 
         const receiverSockets = userIdToSocketIds.get(receiverId);
         if (receiverSockets && receiverSockets.size > 0) {
           await Message.updateOne({ _id: doc._id }, { $set: { status: 'delivered' } });
+          const delivered = await Message.findById(doc._id).lean();
+          const outRecv = { ...toChatMessageDto(delivered, receiverId), status: 'delivered' };
           for (const sid of receiverSockets) {
-            io.to(sid).emit('receive_message', { ...out, status: 'delivered' });
+            io.to(sid).emit('receive_message', outRecv);
           }
           socket.emit('message_status', {
-            id: out.id,
+            id: outSender.id,
             senderId: uid,
             receiverId,
             status: 'delivered',
@@ -243,7 +270,9 @@ function attachSocketServer(httpServer, options) {
     socket.on('disconnect', () => {
       const becameOffline = markUserSocketDisconnected(uid, socket.id);
       if (becameOffline) {
-        io.emit('presence_update', { userId: uid, online: false });
+        const lastActiveAt = new Date().toISOString();
+        userIdToLastActiveAt.set(uid, lastActiveAt);
+        io.emit('presence_update', { userId: uid, online: false, lastActiveAt });
       }
     });
   });
@@ -258,30 +287,115 @@ function emitMessageUnsent(payload) {
   const messageId = String(payload?.id || '').trim();
   if (!senderId || !receiverId || !messageId) return;
 
-  const out = {
+  const base = {
     id: messageId,
     senderId,
     receiverId,
     unsent: true,
-    message: 'Message unsent',
+    deletedForEveryone: true,
+    message: '',
   };
 
   const senderSockets = userIdToSocketIds.get(senderId);
   if (senderSockets && senderSockets.size > 0) {
     for (const sid of senderSockets) {
-      ioInstance.to(sid).emit('message_status', out);
+      ioInstance.to(sid).emit('message_status', {
+        ...base,
+        tombstoneText: 'You deleted a message',
+      });
     }
   }
 
   const receiverSockets = userIdToSocketIds.get(receiverId);
   if (receiverSockets && receiverSockets.size > 0) {
     for (const sid of receiverSockets) {
-      ioInstance.to(sid).emit('message_status', out);
+      ioInstance.to(sid).emit('message_status', {
+        ...base,
+        tombstoneText: 'This message was removed',
+      });
     }
+  }
+}
+
+function emitMessageReactionUpdate(payload) {
+  if (!ioInstance) return;
+  const senderId = String(payload?.senderId || '').trim();
+  const receiverId = String(payload?.receiverId || '').trim();
+  const messageId = String(payload?.id || '').trim();
+  if (!senderId || !receiverId || !messageId) return;
+
+  const out = {
+    id: messageId,
+    senderId,
+    receiverId,
+    reactions: Array.isArray(payload.reactions) ? payload.reactions : [],
+  };
+
+  const senderSockets = userIdToSocketIds.get(senderId);
+  if (senderSockets && senderSockets.size > 0) {
+    for (const sid of senderSockets) {
+      ioInstance.to(sid).emit('message_reaction', out);
+    }
+  }
+  const receiverSockets = userIdToSocketIds.get(receiverId);
+  if (receiverSockets && receiverSockets.size > 0) {
+    for (const sid of receiverSockets) {
+      ioInstance.to(sid).emit('message_reaction', out);
+    }
+  }
+}
+
+function emitViewerRemovedMessage(payload) {
+  if (!ioInstance) return;
+  const affectedUserId = String(payload?.affectedUserId || '').trim();
+  const messageId = String(payload?.id || '').trim();
+  const senderId = String(payload?.senderId || '').trim();
+  const receiverId = String(payload?.receiverId || '').trim();
+  if (!affectedUserId || !messageId) return;
+
+  const sockets = userIdToSocketIds.get(affectedUserId);
+  if (!sockets || sockets.size === 0) return;
+
+  const out = {
+    id: messageId,
+    senderId,
+    receiverId,
+    viewerRemoved: true,
+    message: 'You deleted a message',
+  };
+
+  for (const sid of sockets) {
+    ioInstance.to(sid).emit('message_status', out);
+  }
+}
+
+function emitMessageVanishedForViewer(payload) {
+  if (!ioInstance) return;
+  const viewerId = String(payload?.viewerId || '').trim();
+  const messageId = String(payload?.id || '').trim();
+  const senderId = String(payload?.senderId || '').trim();
+  const receiverId = String(payload?.receiverId || '').trim();
+  if (!viewerId || !messageId) return;
+
+  const sockets = userIdToSocketIds.get(viewerId);
+  if (!sockets || sockets.size === 0) return;
+
+  const out = {
+    id: messageId,
+    senderId,
+    receiverId,
+    vanishedForViewer: true,
+  };
+
+  for (const sid of sockets) {
+    ioInstance.to(sid).emit('message_vanished_for_viewer', out);
   }
 }
 
 module.exports = {
   attachSocketServer,
   emitMessageUnsent,
+  emitMessageReactionUpdate,
+  emitViewerRemovedMessage,
+  emitMessageVanishedForViewer,
 };

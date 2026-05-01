@@ -16,12 +16,25 @@ router.post('/seen', authMiddleware, (req, res) =>
   void messageController.markSeen(req, res),
 );
 
-router.delete('/:messageId', authMiddleware, (req, res) =>
-  void messageController.deleteMessage(req, res),
+router.post('/:messageId/remove-for-me', authMiddleware, (req, res) =>
+  void messageController.removeMessageForMe(req, res),
 );
 
+router.post('/:messageId/vanish-for-me', authMiddleware, (req, res) =>
+  void messageController.vanishIncomingMessageForViewer(req, res),
+);
+
+router.post('/:messageId/reactions', authMiddleware, (req, res) =>
+  void messageController.setMessageReaction(req, res),
+);
+
+// Static path before `/:messageId` so "conversation" is never captured as a message id.
 router.delete('/conversation/:otherUserId', authMiddleware, (req, res) =>
   void messageController.deleteConversation(req, res),
+);
+
+router.delete('/:messageId', authMiddleware, (req, res) =>
+  void messageController.deleteMessage(req, res),
 );
 
 module.exports = router;

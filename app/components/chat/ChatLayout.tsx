@@ -75,6 +75,8 @@ export function ChatLayout({
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUserName, setActiveUserName] = useState<string>("");
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [lastActiveByUserId, setLastActiveByUserId] = useState<Record<string, string>>({});
+  const [statusNowTick, setStatusNowTick] = useState(0);
 
   // Conversation delete menu state
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -210,6 +212,7 @@ export function ChatLayout({
   useEffect(() => {
     if (!currentUserId) {
       setOnlineUserIds(new Set());
+      setLastActiveByUserId({});
       return;
     }
 
@@ -218,6 +221,14 @@ export function ChatLayout({
     const unsubSnapshot = subscribePresenceSnapshot((payload) => {
       const ids = Array.isArray(payload?.onlineUserIds) ? payload.onlineUserIds : [];
       setOnlineUserIds(new Set(ids.map((id) => String(id))));
+      const lastActive = payload?.lastActiveByUserId && typeof payload.lastActiveByUserId === "object"
+        ? payload.lastActiveByUserId
+        : {};
+      setLastActiveByUserId(
+        Object.fromEntries(
+          Object.entries(lastActive).map(([id, ts]) => [String(id), String(ts || "")]).filter(([, ts]) => ts),
+        ),
+      );
     });
 
     const unsubUpdate = subscribePresenceUpdate((payload) => {
@@ -233,6 +244,16 @@ export function ChatLayout({
         }
         return next;
       });
+      setLastActiveByUserId((prev) => {
+        const next = { ...prev };
+        if (isOnline) {
+          delete next[userId];
+        } else {
+          const timestamp = String(payload?.lastActiveAt || "").trim() || new Date().toISOString();
+          next[userId] = timestamp;
+        }
+        return next;
+      });
     });
 
     return () => {
@@ -240,6 +261,13 @@ export function ChatLayout({
       unsubUpdate();
     };
   }, [currentUserId]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStatusNowTick((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -262,7 +290,7 @@ export function ChatLayout({
         const nextItem: Conversation = {
           otherUserId: otherId,
           otherName: existing?.otherName || knownName,
-          lastMessagePreview: msg.unsent ? "Message unsent" : msg.message || "",
+          lastMessagePreview: msg.unsent ? "Deleted message" : msg.message || "",
           lastTimestamp: msg.timestamp || null,
           hasUnread,
         };
@@ -298,7 +326,7 @@ export function ChatLayout({
           c.otherUserId === otherId
             ? {
                 ...c,
-                lastMessagePreview: "Message unsent",
+                lastMessagePreview: "Deleted message",
               }
             : c,
         ),
@@ -315,6 +343,37 @@ export function ChatLayout({
     if (!id) return false;
     return onlineUserIds.has(id);
   }, [activeUserId, onlineUserIds]);
+
+  const activeConversationLastTimestamp = useMemo(() => {
+    const id = String(activeUserId || "").trim();
+    if (!id) return "";
+    const hit = conversations.find((item) => item.otherUserId === id);
+    return String(hit?.lastTimestamp || "").trim();
+  }, [activeUserId, conversations]);
+
+  const activeUserStatusText = useMemo(() => {
+    const id = String(activeUserId || "").trim();
+    if (!id) return "";
+    if (activeUserConnected) return "Online";
+    const lastActiveAt = String(lastActiveByUserId[id] || "").trim() || activeConversationLastTimestamp;
+    if (!lastActiveAt) return "Offline";
+    const lastActiveTime = new Date(lastActiveAt).getTime();
+    if (!Number.isFinite(lastActiveTime)) return "Offline";
+    const diffMs = Date.now() - lastActiveTime;
+    if (!Number.isFinite(diffMs) || diffMs < 0) return "Offline";
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return `Active ${diffSec}s ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `Active ${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `Active ${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay === 1) return "Active 1 day ago";
+    if (diffDay < 7) return `Active ${diffDay} days ago`;
+    const diffWeek = Math.floor(diffDay / 7);
+    if (diffWeek === 1) return "Active a week ago";
+    return `Active ${diffWeek} weeks ago`;
+  }, [activeUserId, activeUserConnected, lastActiveByUserId, activeConversationLastTimestamp, statusNowTick]);
   const handleSelectUserFromSearch = (u: UserSearchResult) => {
     // Temporary selection only.
     setActiveUserId(u.id);
@@ -529,7 +588,7 @@ export function ChatLayout({
           currentUserId={currentUserId}
           otherUserId={activeUserId}
           otherUserLabel={activeUserName}
-          statusText={activeUserConnected ? "Online" : "Offline"}
+          statusText={activeUserStatusText}
           allowUnsend={allowUnsend}
           onConversationUpdated={(otherId, msgs: ChatMessagePayload[]) => {
             if (!otherId) return;
@@ -550,7 +609,7 @@ export function ChatLayout({
               const nextItem: Conversation = {
                 otherUserId: otherId,
                 otherName: name,
-                lastMessagePreview: last.unsent ? "Message unsent" : last.message || "",
+                lastMessagePreview: last.unsent ? "Deleted message" : last.message || "",
                 lastTimestamp: last.timestamp || null,
               };
 

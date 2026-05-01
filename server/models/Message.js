@@ -23,6 +23,18 @@ const messageSchema = new mongoose.Schema({
   },
   seenAt: { type: Date, default: null, index: true },
   unsent: { type: Boolean, default: false, index: true },
+  removedForUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  /** Viewer hid an incoming message — omitted from their thread entirely (no tombstone). */
+  vanishedForUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  reactions: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      emoji: { type: String, required: true, trim: true, maxlength: 8 },
+    },
+  ],
+  replyToMessageId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+  replyPreview: { type: String, default: '', trim: true, maxlength: 500 },
+  forwardedFromPreview: { type: String, default: '', trim: true, maxlength: 500 },
 });
 
 messageSchema.index({ senderId: 1, receiverId: 1, timestamp: -1 });

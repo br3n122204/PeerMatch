@@ -64,10 +64,16 @@ export function sendChatMessage(receiverId: string, message: string): void {
   s.emit("send_message", { receiverId: rid, message: text });
 }
 
+export type SendMessageExtras = {
+  replyToMessageId?: string;
+  forwardedFromPreview?: string;
+};
+
 export function sendChatMessageWithClientId(
   receiverId: string,
   message: string,
   clientMessageId: string,
+  extras?: SendMessageExtras,
 ): void {
   const s = socket;
   if (!s?.connected) return;
@@ -75,7 +81,15 @@ export function sendChatMessageWithClientId(
   const text = String(message || "").trim();
   const cid = String(clientMessageId || "").trim();
   if (!rid || !text || !cid) return;
-  s.emit("send_message", { receiverId: rid, message: text, clientMessageId: cid });
+  const replyToMessageId = String(extras?.replyToMessageId || "").trim();
+  const forwardedFromPreview = String(extras?.forwardedFromPreview || "").trim().slice(0, 500);
+  s.emit("send_message", {
+    receiverId: rid,
+    message: text,
+    clientMessageId: cid,
+    ...(replyToMessageId ? { replyToMessageId } : {}),
+    ...(forwardedFromPreview ? { forwardedFromPreview } : {}),
+  });
 }
 
 /**
@@ -112,6 +126,23 @@ export type MessageStatusPayload = {
   seenAt?: string;
   unsent?: boolean;
   message?: string;
+  deletedForEveryone?: boolean;
+  tombstoneText?: string;
+  viewerRemoved?: boolean;
+};
+
+export type MessageReactionPayload = {
+  id?: string;
+  senderId?: string;
+  receiverId?: string;
+  reactions?: { userId: string; emoji: string }[];
+};
+
+export type MessageVanishedPayload = {
+  id?: string;
+  senderId?: string;
+  receiverId?: string;
+  vanishedForViewer?: boolean;
 };
 
 export function subscribeMessageStatus(handler: (payload: MessageStatusPayload) => void): () => void {
@@ -136,6 +167,28 @@ export function subscribeMessageSent(handler: (payload: ChatMessagePayload) => v
   };
 }
 
+export function subscribeMessageReaction(handler: (payload: MessageReactionPayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("message_reaction", handler);
+  return () => {
+    s.off("message_reaction", handler);
+  };
+}
+
+export function subscribeMessageVanishedForViewer(handler: (payload: MessageVanishedPayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("message_vanished_for_viewer", handler);
+  return () => {
+    s.off("message_vanished_for_viewer", handler);
+  };
+}
+
 export function emitMarkSeen(otherUserId: string): void {
   const s = socket;
   if (!s?.connected) return;
@@ -147,10 +200,12 @@ export function emitMarkSeen(otherUserId: string): void {
 export type PresenceUpdatePayload = {
   userId?: string;
   online?: boolean;
+  lastActiveAt?: string;
 };
 
 export type PresenceSnapshotPayload = {
   onlineUserIds?: string[];
+  lastActiveByUserId?: Record<string, string>;
 };
 
 export function subscribePresenceUpdate(handler: (payload: PresenceUpdatePayload) => void): () => void {
