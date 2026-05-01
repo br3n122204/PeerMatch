@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   BookOpen,
@@ -11,7 +11,6 @@ import {
   ChevronDown,
   CirclePlus,
   Clock,
-  DollarSign,
   FilePenLine,
   FileText,
   Handshake,
@@ -32,13 +31,13 @@ import {
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
-import { ChatThread } from "../components/chat/ChatThread";
+import { createCommunityPost, getCommunityPosts, type CommunityPostPriority } from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
-import { UserSearchDropdown } from "../components/chat/UserSearchDropdown";
 import { ChatLayout } from "../components/chat/ChatLayout";
 
 type PostItem = {
   id: string;
+  authorId: string;
   author: string;
   timeAgo: string;
   title: string;
@@ -154,7 +153,12 @@ function ClientHomePageContent() {
   const [savedProfileSnapshot, setSavedProfileSnapshot] = useState<ProfileFormSnapshot | null>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(true);
-  const posts: PostItem[] = [];
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [postCategoryInput, setPostCategoryInput] = useState("");
+  const [postPriorityInput, setPostPriorityInput] = useState<CommunityPostPriority>("Normal");
+  const [postTitleInput, setPostTitleInput] = useState("");
+  const [postDescriptionInput, setPostDescriptionInput] = useState("");
+  const [postStatusMessage, setPostStatusMessage] = useState("");
   const recentActivities: ActivityItem[] = [];
   const notifications: string[] = [];
 
@@ -168,6 +172,34 @@ function ClientHomePageContent() {
   const displayHours = displayHoursRaw;
 
   const postsHeading = "Latest Post By CIT Community";
+
+  const formatTimeAgo = (value: string) => {
+    const ts = new Date(value).getTime();
+    if (!Number.isFinite(ts)) return "Just now";
+    const diffMs = Date.now() - ts;
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diffMs < minute) return "Just now";
+    if (diffMs < hour) return `${Math.floor(diffMs / minute)} min ago`;
+    if (diffMs < day) return `${Math.floor(diffMs / hour)} hr ago`;
+    return `${Math.floor(diffMs / day)} day${Math.floor(diffMs / day) > 1 ? "s" : ""} ago`;
+  };
+
+  const mapPostForUi = (
+    post: ReturnType<typeof getCommunityPosts>[number],
+    fallbackAvatar: string,
+  ): PostItem => ({
+    id: post.id,
+    authorId: post.authorId,
+    author: post.authorName || "Client User",
+    timeAgo: formatTimeAgo(post.createdAt),
+    title: post.title,
+    content: post.content,
+    category: post.category || "General",
+    priority: post.priority,
+    avatar: post.authorAvatarDataUrl || fallbackAvatar,
+  });
 
   useEffect(() => {
     setPeerUserId(peerFromQuery);
@@ -201,6 +233,21 @@ function ClientHomePageContent() {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    const loadPosts = () => {
+      const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
+      const nextPosts = getCommunityPosts().map((post) => mapPostForUi(post, fallbackAvatar));
+      setPosts(nextPosts);
+    };
+    loadPosts();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== "peermatch_community_posts_v1") return;
+      loadPosts();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [profilePhotoDataUrl]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -348,6 +395,49 @@ function ClientHomePageContent() {
     }
   };
 
+  const handleCreatePost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const category = postCategoryInput.trim();
+    const title = postTitleInput.trim();
+    const content = postDescriptionInput.trim();
+    if (!category || !title || !content || !meUserId) {
+      setPostStatusMessage("Please complete category, title, and description.");
+      return;
+    }
+    const created = createCommunityPost({
+      authorId: meUserId,
+      authorName: profileNameInput.trim() || displayName || "Client User",
+      authorEmail: displayEmail,
+      authorAccountType: "client",
+      authorAvatarDataUrl: profilePhotoDataUrl || undefined,
+      category,
+      title,
+      content,
+      priority: postPriorityInput,
+    });
+    setPosts((prev) =>
+      [
+        {
+          id: created.id,
+          authorId: created.authorId,
+          author: created.authorName,
+          timeAgo: "Just now",
+          title: created.title,
+          content: created.content,
+          category: created.category,
+          priority: created.priority,
+          avatar: created.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client",
+        },
+        ...prev,
+      ].filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index),
+    );
+    setPostCategoryInput("");
+    setPostPriorityInput("Normal");
+    setPostTitleInput("");
+    setPostDescriptionInput("");
+    setPostStatusMessage("Post published.");
+  };
+
   const navItems = [
     { href: "/client-home", label: "Dashboard", icon: <LayoutDashboard className="h-5 w-5 shrink-0" strokeWidth={1.75} /> },
     {
@@ -437,7 +527,7 @@ function ClientHomePageContent() {
 
                 <div className="mt-7 grid gap-5 xl:grid-cols-[minmax(0,1fr)_230px]">
                   <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-5 shadow-sm sm:p-6">
-                    <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+                    <form className="space-y-4" onSubmit={handleCreatePost}>
                       <div>
                         <label
                           htmlFor="post-category"
@@ -451,6 +541,8 @@ function ClientHomePageContent() {
                         <input
                           id="post-category"
                           type="text"
+                          value={postCategoryInput}
+                          onChange={(event) => setPostCategoryInput(event.target.value)}
                           placeholder="e.g. Mathematics, Physics, History"
                           className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                         />
@@ -471,12 +563,14 @@ function ClientHomePageContent() {
                           <div className="relative">
                             <select
                               id="post-urgency"
-                              defaultValue="medium"
+                              value={postPriorityInput}
+                              onChange={(event) =>
+                                setPostPriorityInput(event.target.value === "Important" ? "Important" : "Normal")
+                              }
                               className="h-11 w-full appearance-none rounded-xl border border-zinc-300 bg-white px-3 pr-9 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                             >
-                              <option value="low">Low</option>
-                              <option value="medium">Medium</option>
-                              <option value="high">High</option>
+                              <option value="Normal">Normal</option>
+                              <option value="Important">Important</option>
                             </select>
                             <ChevronDown
                               aria-hidden="true"
@@ -486,25 +580,24 @@ function ClientHomePageContent() {
                           </div>
                         </div>
 
-                        <div>
+                        <div className="sm:col-span-2">
                           <label
-                            htmlFor="post-rate"
+                            htmlFor="post-title"
                             className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
                           >
                             <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
-                              <DollarSign className="h-3.5 w-3.5" strokeWidth={2} />
+                              <FileText className="h-3.5 w-3.5" strokeWidth={2} />
                             </span>
-                            Hourly Rate
+                            Post Title
                           </label>
-                          <div className="relative">
-                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
-                            <input
-                              id="post-rate"
-                              type="text"
-                              defaultValue="25"
-                              className="h-11 w-full rounded-xl border border-zinc-300 bg-white pl-7 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
-                            />
-                          </div>
+                          <input
+                            id="post-title"
+                            type="text"
+                            value={postTitleInput}
+                            onChange={(event) => setPostTitleInput(event.target.value)}
+                            placeholder="e.g. Need help understanding Trigonometry"
+                            className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                          />
                         </div>
                       </div>
 
@@ -520,6 +613,8 @@ function ClientHomePageContent() {
                         </label>
                         <textarea
                           id="post-description"
+                          value={postDescriptionInput}
+                          onChange={(event) => setPostDescriptionInput(event.target.value)}
                           placeholder="Describe what you need help with in detail. Be specific about topics, deadlines, and learning goals..."
                           className="h-32 w-full resize-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                         />
@@ -536,11 +631,23 @@ function ClientHomePageContent() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => {
+                            setPostCategoryInput("");
+                            setPostPriorityInput("Normal");
+                            setPostTitleInput("");
+                            setPostDescriptionInput("");
+                            setPostStatusMessage("");
+                          }}
                           className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-700 transition hover:bg-zinc-50"
                         >
                           Clear
                         </button>
                       </div>
+                      {postStatusMessage ? (
+                        <p className={`text-xs ${postStatusMessage === "Post published." ? "text-[#FF6B35]" : "text-red-600"}`}>
+                          {postStatusMessage}
+                        </p>
+                      ) : null}
                     </form>
                   </article>
 
