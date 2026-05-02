@@ -53,7 +53,7 @@ export default function FreelancerDashboardPage() {
         </h2>
         <div className="mt-5 space-y-4">
           {posts.map((post) => (
-            <article key={post.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-5 lg:p-7">
+            <article key={post.id} className="cursor-pointer rounded-2xl border border-zinc-100 bg-zinc-50 p-5 lg:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
