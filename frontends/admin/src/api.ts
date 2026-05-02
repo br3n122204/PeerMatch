@@ -9,8 +9,11 @@ export type AuthUser = {
 function apiBase(): string {
   // `next build` runs TypeScript checks on the whole repo and may not load Vite's `ImportMeta` types.
   // Cast here so the admin API client can still compile under both environments.
-  const env = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env
-  return env?.VITE_API_BASE_URL || 'http://localhost:5000'
+  const env = (import.meta as { env?: { VITE_API_BASE_URL?: string; DEV?: boolean } }).env
+  if (env?.VITE_API_BASE_URL) return env.VITE_API_BASE_URL
+  // Dev: use Vite proxy (see vite.config.ts) so requests go to /api on port 5174.
+  if (env?.DEV) return ''
+  return 'http://localhost:5000'
 }
 
 export class ApiError extends Error {

@@ -8,6 +8,7 @@
     "dev:next": "node --title=\"PeerMatch Main\" node_modules/next/dist/bin/next dev --webpack",
     "dev:server": "nodemon --exec \"node --title=\\\"PeerMatch Main\\\"\" server/devMainApi.js",
     "dev:admin": "npm run dev --prefix frontends/admin",
+    "dev:admin:stack": "concurrently --names \"PeerMatch API,PeerMatch Admin\" --prefix-colors \"#FA642C,#0069A8\" \"npm run dev:server\" \"npm run dev --prefix frontends/admin\"",
     "build": "next build",
     "start": "next start",
     "start:server": "node server/server.js",
