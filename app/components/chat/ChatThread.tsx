@@ -30,8 +30,35 @@ type ChatThreadProps = {
 };
 
 function isSameConversation(msg: ChatMessagePayload, a: string, b: string): boolean {
-  const pair = new Set([msg.senderId, msg.receiverId]);
-  return pair.has(a) && pair.has(b) && pair.size === 2;
+  const aa = String(a || "").trim();
+  const bb = String(b || "").trim();
+  const pair = new Set([String(msg.senderId || "").trim(), String(msg.receiverId || "").trim()]);
+  return pair.has(aa) && pair.has(bb) && pair.size === 2;
+}
+
+function applyReactionToggle(
+  prev: ChatMessagePayload[],
+  messageId: string,
+  emoji: string,
+  userId: string,
+): ChatMessagePayload[] {
+  const uid = String(userId || "").trim();
+  return prev.map((m) => {
+    if (m.id !== messageId) return m;
+    const list = [...(m.reactions || [])];
+    const idx = list.findIndex((r) => String(r.userId || "").trim() === uid);
+    let next = list;
+    if (idx >= 0) {
+      if (list[idx].emoji === emoji) {
+        next = list.filter((_, i) => i !== idx);
+      } else {
+        next = list.map((r, i) => (i === idx ? { userId: uid, emoji } : r));
+      }
+    } else {
+      next = [...list, { userId: uid, emoji }];
+    }
+    return { ...m, reactions: next };
+  });
 }
 
 export function ChatThread({
@@ -64,27 +91,30 @@ export function ChatThread({
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const onConversationUpdatedRef = useRef(onConversationUpdated);
   const lastSeenEmitAtRef = useRef<number>(0);
+  const reactionInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     onConversationUpdatedRef.current = onConversationUpdated;
   }, [onConversationUpdated]);
 
   const trimmedOther = String(otherUserId || "").trim();
+  const selfId = String(currentUserId || "").trim();
+  const resolvedPeerId = String(resolvedOtherId || "").trim();
 
   function looksLikeObjectId(v: string) {
     return /^[a-fA-F0-9]{24}$/.test(v);
   }
 
-  const canChat = Boolean(currentUserId && resolvedOtherId && resolvedOtherId !== currentUserId);
+  const canChat = Boolean(selfId && resolvedPeerId && resolvedPeerId !== selfId);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
   useEffect(() => {
-    if (!currentUserId) return;
-    connectSocket(currentUserId);
-  }, [currentUserId]);
+    if (!selfId) return;
+    connectSocket(selfId);
+  }, [selfId]);
 
   // Resolve a name/partial into a MongoDB _id so both the history fetch and socket matching work.
   useEffect(() => {
@@ -92,7 +122,7 @@ export function ChatThread({
     const raw = String(otherUserId || "").trim();
 
     setResolvedOtherId("");
-    if (!raw || !currentUserId || raw === currentUserId) return;
+    if (!raw || !selfId || raw === selfId) return;
     if (looksLikeObjectId(raw)) {
       setResolvedOtherId(raw);
       return;
@@ -120,7 +150,7 @@ export function ChatThread({
     return () => {
       cancelled = true;
     };
-  }, [otherUserId, currentUserId]);
+  }, [otherUserId, selfId]);
 
   useEffect(() => {
     if (!canChat) {
@@ -149,7 +179,7 @@ export function ChatThread({
     return () => {
       cancelled = true;
     };
-  }, [canChat, resolvedOtherId, currentUserId]);
+  }, [canChat, resolvedOtherId]);
 
   // Keep sidebar conversation preview in sync (last message + timestamp).
   useEffect(() => {
@@ -163,7 +193,10 @@ export function ChatThread({
   useEffect(() => {
     if (!canChat) return;
     const hasUnseenIncoming = messages.some(
-      (m) => m.senderId === resolvedOtherId && m.receiverId === currentUserId && m.status !== "seen",
+      (m) =>
+        String(m.senderId || "").trim() === resolvedPeerId &&
+        String(m.receiverId || "").trim() === selfId &&
+        m.status !== "seen",
     );
     if (!hasUnseenIncoming) return;
 
@@ -174,25 +207,25 @@ export function ChatThread({
     emitMarkSeen(resolvedOtherId);
     // Fallback for non-socket receivers / legacy clients.
     void apiPostJson("/api/messages/seen", { otherUserId: resolvedOtherId }).catch(() => undefined);
-  }, [canChat, resolvedOtherId, messages, currentUserId]);
+  }, [canChat, resolvedOtherId, messages, resolvedPeerId, selfId]);
 
   useEffect(() => {
     if (!canChat) return;
 
     const unsub = subscribeReceiveMessage((msg) => {
-      if (!isSameConversation(msg, currentUserId, resolvedOtherId)) return;
+      if (!isSameConversation(msg, selfId, resolvedPeerId)) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
     });
     return unsub;
-  }, [canChat, currentUserId, resolvedOtherId]);
+  }, [canChat, selfId, resolvedPeerId]);
 
   useEffect(() => {
     if (!canChat) return;
     const unsub = subscribeMessageSent((msg) => {
-      if (!isSameConversation(msg, currentUserId, resolvedOtherId)) return;
+      if (!isSameConversation(msg, selfId, resolvedPeerId)) return;
       const clientMessageId = String(msg.clientMessageId || "").trim();
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
@@ -200,7 +233,12 @@ export function ChatThread({
           const idx = prev.findIndex((m) => m.id === clientMessageId);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...msg };
+            const prevEntry = prev[idx];
+            const hasReactionsKey = Object.prototype.hasOwnProperty.call(msg, "reactions");
+            next[idx] = {
+              ...msg,
+              reactions: hasReactionsKey ? (msg.reactions ?? []) : (prevEntry.reactions ?? []),
+            };
             return next;
           }
         }
@@ -208,7 +246,7 @@ export function ChatThread({
       });
     });
     return unsub;
-  }, [canChat, currentUserId, resolvedOtherId]);
+  }, [canChat, selfId, resolvedPeerId]);
 
   useEffect(() => {
     if (!canChat) return;
@@ -218,7 +256,7 @@ export function ChatThread({
       const receiverId = String(payload.receiverId || "").trim();
       if (!senderId || !receiverId) return;
       const pair = new Set([senderId, receiverId]);
-      if (!pair.has(currentUserId) || !pair.has(resolvedOtherId) || pair.size !== 2) return;
+      if (!pair.has(selfId) || !pair.has(resolvedPeerId) || pair.size !== 2) return;
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -257,7 +295,7 @@ export function ChatThread({
       );
     });
     return unsub;
-  }, [canChat, currentUserId, resolvedOtherId]);
+  }, [canChat, selfId, resolvedPeerId]);
 
   useEffect(() => {
     if (!canChat) return;
@@ -267,16 +305,18 @@ export function ChatThread({
       const receiverId = String(payload.receiverId || "").trim();
       if (!senderId || !receiverId) return;
       const pair = new Set([senderId, receiverId]);
-      if (!pair.has(currentUserId) || !pair.has(resolvedOtherId) || pair.size !== 2) return;
+      if (!pair.has(selfId) || !pair.has(resolvedPeerId) || pair.size !== 2) return;
 
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === payload.id ? { ...m, reactions: Array.isArray(payload.reactions) ? payload.reactions : [] } : m,
-        ),
+        prev.map((m) => {
+          if (m.id !== payload.id) return m;
+          if (!Array.isArray(payload.reactions)) return m;
+          return { ...m, reactions: payload.reactions };
+        }),
       );
     });
     return unsub;
-  }, [canChat, currentUserId, resolvedOtherId]);
+  }, [canChat, selfId, resolvedPeerId]);
 
   useEffect(() => {
     if (!canChat) return;
@@ -286,11 +326,11 @@ export function ChatThread({
       const receiverId = String(payload.receiverId || "").trim();
       if (!senderId || !receiverId) return;
       const pair = new Set([senderId, receiverId]);
-      if (!pair.has(currentUserId) || !pair.has(resolvedOtherId) || pair.size !== 2) return;
+      if (!pair.has(selfId) || !pair.has(resolvedPeerId) || pair.size !== 2) return;
       setMessages((prev) => prev.filter((m) => m.id !== payload.id));
     });
     return unsub;
-  }, [canChat, currentUserId, resolvedOtherId]);
+  }, [canChat, selfId, resolvedPeerId]);
 
   useEffect(() => {
     const unsub = subscribeSocketError((p) => {
@@ -345,8 +385,8 @@ export function ChatThread({
         replyingTo && /^[a-fA-F0-9]{24}$/.test(replyingTo.id) ? replyingTo.id : undefined;
       const pending: ChatMessagePayload = {
         id: clientMessageId,
-        senderId: currentUserId,
-        receiverId: resolvedOtherId,
+        senderId: selfId,
+        receiverId: resolvedPeerId,
         message: text,
         timestamp: new Date().toISOString(),
         status: "sent",
@@ -354,13 +394,13 @@ export function ChatThread({
         ...(replyingTo ? { replyTo: { id: replyingTo.id, preview: replyingTo.preview } } : {}),
       };
       setMessages((prev) => [...prev, pending]);
-      sendChatMessageWithClientId(resolvedOtherId, text, clientMessageId, {
+      sendChatMessageWithClientId(resolvedPeerId, text, clientMessageId, {
         ...(replyToMessageId ? { replyToMessageId } : {}),
       });
       setDraft("");
       setReplyingTo(null);
     },
-    [canChat, currentUserId, draft, replyingTo, resolvedOtherId],
+    [canChat, selfId, draft, replyingTo, resolvedPeerId],
   );
 
   const unsendForEveryone = useCallback(
@@ -486,30 +526,23 @@ export function ChatThread({
     async (messageId: string, emoji: string) => {
       if (!messageId) return;
 
-      const applyLocal = (prev: ChatMessagePayload[]) =>
-        prev.map((m) => {
-          if (m.id !== messageId) return m;
-          const list = [...(m.reactions || [])];
-          const idx = list.findIndex((r) => r.userId === currentUserId);
-          let next = list;
-          if (idx >= 0) {
-            if (list[idx].emoji === emoji) {
-              next = list.filter((_, i) => i !== idx);
-            } else {
-              next = list.map((r, i) => (i === idx ? { userId: currentUserId, emoji } : r));
-            }
-          } else {
-            next = [...list, { userId: currentUserId, emoji }];
-          }
-          return { ...m, reactions: next };
-        });
+      if (!selfId) return;
 
       if (messageId.startsWith("pending-")) {
-        setMessages(applyLocal);
+        setMessages((prev) => applyReactionToggle(prev, messageId, emoji, selfId));
         return;
       }
 
-      setMessages(applyLocal);
+      if (reactionInFlightRef.current.has(messageId)) return;
+      reactionInFlightRef.current.add(messageId);
+
+      let rollback: NonNullable<ChatMessagePayload["reactions"]> = [];
+      setMessages((prev) => {
+        const msg = prev.find((m) => m.id === messageId);
+        rollback = msg?.reactions?.length ? [...msg.reactions] : [];
+        return applyReactionToggle(prev, messageId, emoji, selfId);
+      });
+
       try {
         const data = await apiPostJson<{ reactions: { userId: string; emoji: string }[] }>(
           `/api/messages/${encodeURIComponent(messageId)}/reactions`,
@@ -521,9 +554,14 @@ export function ChatThread({
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Could not react.";
         setSocketError(message);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, reactions: rollback } : m)),
+        );
+      } finally {
+        reactionInFlightRef.current.delete(messageId);
       }
     },
-    [currentUserId],
+    [selfId],
   );
 
   const loadForwardTargets = useCallback(async () => {
@@ -569,12 +607,12 @@ export function ChatThread({
 
       setSocketError(null);
       const clientMessageId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const isSameThread = targetUserId === resolvedOtherId;
+      const isSameThread = targetUserId === resolvedPeerId;
 
       if (isSameThread) {
         const pending: ChatMessagePayload = {
           id: clientMessageId,
-          senderId: currentUserId,
+          senderId: selfId,
           receiverId: targetUserId,
           message: body,
           timestamp: new Date().toISOString(),
@@ -591,7 +629,7 @@ export function ChatThread({
       setForwardFrom(null);
       setForwardNote("");
     },
-    [currentUserId, forwardFrom, forwardNote, resolvedOtherId],
+    [selfId, forwardFrom, forwardNote, resolvedPeerId],
   );
 
   const title = useMemo(() => {
@@ -601,7 +639,7 @@ export function ChatThread({
     return "Conversation";
   }, [otherUserLabel, resolvedOtherId, trimmedOther]);
 
-  if (!currentUserId) {
+  if (!selfId) {
     return (
       <div className={`rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500 ${className}`}>
         Sign in to use messages.
@@ -649,7 +687,7 @@ export function ChatThread({
             <ChatMessageRow
               key={m.id}
               m={m}
-              currentUserId={currentUserId}
+              currentUserId={selfId}
               allowUnsend={allowUnsend}
               openMenuId={openActionMenuId}
               openReactionId={openReactionId}

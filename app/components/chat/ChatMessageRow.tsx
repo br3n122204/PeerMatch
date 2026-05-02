@@ -29,11 +29,12 @@ function reactionChips(
 ) {
   if (!reactions?.length) return new Map<string, { count: number; mine: boolean }>();
   const map = new Map<string, { count: number; mine: boolean }>();
+  const self = String(myId || "").trim();
   for (const r of reactions) {
     const e = r.emoji;
     const cur = map.get(e) || { count: 0, mine: false };
     cur.count += 1;
-    if (r.userId === myId) cur.mine = true;
+    if (String(r.userId || "").trim() === self) cur.mine = true;
     map.set(e, cur);
   }
   return map;
@@ -104,10 +105,10 @@ export function ChatMessageRow({
 
   const toolbar = showActions ? (
     <div
-      className={`mb-1 flex shrink-0 flex-col items-center gap-0.5 self-end transition-opacity duration-150 ${
+      className={`relative z-0 mb-1 flex shrink-0 flex-col items-center gap-0.5 self-end transition-opacity duration-150 ${
         openMenuId === m.id || openReactionId === m.id
           ? "opacity-100"
-          : "opacity-0 group-hover/message:opacity-100"
+          : "pointer-events-none opacity-0 group-hover/message:pointer-events-auto group-hover/message:opacity-100"
       }`}
     >
       <div className="flex items-center gap-0.5 rounded-full bg-white/95 px-0.5 py-0.5 shadow-sm ring-1 ring-zinc-200/80">
@@ -235,7 +236,7 @@ export function ChatMessageRow({
   ) : null;
 
   const bubble = (
-    <div className="min-w-0 max-w-full">
+    <div className="relative z-[1] min-w-0 max-w-full">
       <div
         className={`rounded-xl px-4 py-2.5 ${
           isTombstone
@@ -312,7 +313,7 @@ export function ChatMessageRow({
               onClick={() => onReact(m.id, emoji)}
             >
               <span>{emoji}</span>
-              {info.count > 1 ? <span className="text-[10px] font-semibold">{info.count}</span> : null}
+              <span className="text-[10px] font-semibold">{info.count}</span>
             </button>
           ))}
         </div>

@@ -2,10 +2,14 @@ const mongoose = require('mongoose');
 
 function mapReactions(m) {
   const list = Array.isArray(m.reactions) ? m.reactions : [];
-  return list.map((r) => ({
-    userId: String(r.userId),
-    emoji: String(r.emoji || ''),
-  }));
+  /** At most one reaction per user (dedupe legacy / race duplicates). */
+  const byUser = new Map();
+  for (const r of list) {
+    const userId = String(r.userId);
+    const emoji = String(r.emoji || '');
+    byUser.set(userId, { userId, emoji });
+  }
+  return [...byUser.values()];
 }
 
 function toChatMessageDto(m, myId) {

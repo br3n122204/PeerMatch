@@ -363,27 +363,100 @@ async function setMessageReaction(req, res) {
       return res.status(403).json({ message: 'Not part of this conversation.' });
     }
 
-    const reactions = Array.isArray(message.reactions) ? message.reactions.map((r) => ({ ...r })) : [];
-    const idx = reactions.findIndex((r) => String(r.userId) === myId);
-    let next = reactions;
-    if (idx >= 0) {
-      if (reactions[idx].emoji === emoji) {
-        next = reactions.filter((_, i) => i !== idx);
-      } else {
-        next = reactions.map((r, i) => (i === idx ? { userId: r.userId, emoji } : r));
-      }
-    } else {
-      next = [...reactions, { userId: myId, emoji }];
+    const myOid = new mongoose.Types.ObjectId(myId);
+    const msgOid = new mongoose.Types.ObjectId(messageId);
+
+    /** Single atomic toggle: one reaction per user; same emoji removes, different emoji replaces. */
+    const pipeline = [
+      {
+        $set: {
+          reactions: {
+            $let: {
+              vars: {
+                all: { $ifNull: ['$reactions', []] },
+                mineArr: {
+                  $filter: {
+                    input: { $ifNull: ['$reactions', []] },
+                    as: 'r',
+                    cond: { $eq: ['$$r.userId', myOid] },
+                  },
+                },
+              },
+              in: {
+                $let: {
+                  vars: {
+                    firstMine: { $arrayElemAt: ['$$mineArr', 0] },
+                  },
+                  in: {
+                    $cond: [
+                      { $eq: [{ $ifNull: ['$$firstMine', null] }, null] },
+                      { $concatArrays: ['$$all', [{ userId: myOid, emoji }]] },
+                      {
+                        $cond: [
+                          { $eq: ['$$firstMine.emoji', emoji] },
+                          {
+                            $filter: {
+                              input: '$$all',
+                              as: 'r',
+                              cond: { $ne: ['$$r.userId', myOid] },
+                            },
+                          },
+                          {
+                            $map: {
+                              input: '$$all',
+                              as: 'r',
+                              in: {
+                                $cond: [
+                                  { $eq: ['$$r.userId', myOid] },
+                                  { userId: myOid, emoji },
+                                  '$$r',
+                                ],
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    const upd = await Message.updateOne({ _id: msgOid, unsent: { $ne: true } }, pipeline);
+    if (upd.matchedCount === 0) {
+      return res.status(404).json({ message: 'Message not found.' });
     }
 
-    message.reactions = next;
-    await message.save();
+    const fresh = await Message.findById(messageId).lean();
+    if (!fresh) {
+      return res.status(404).json({ message: 'Message not found.' });
+    }
+
+    const normalized = mapReactions(fresh);
+    const rawLen = Array.isArray(fresh.reactions) ? fresh.reactions.length : 0;
+    if (rawLen !== normalized.length) {
+      await Message.updateOne(
+        { _id: msgOid },
+        {
+          $set: {
+            reactions: normalized.map((r) => ({
+              userId: new mongoose.Types.ObjectId(r.userId),
+              emoji: r.emoji,
+            })),
+          },
+        },
+      );
+    }
 
     const payload = {
-      id: String(message._id),
+      id: String(fresh._id),
       senderId: sid,
       receiverId: rid,
-      reactions: mapReactions(message),
+      reactions: normalized,
     };
 
     emitMessageReactionUpdate(payload);

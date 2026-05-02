@@ -31,6 +31,7 @@ import {
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+import { normalizeAuthUser } from "../lib/freelancerStorage";
 import { createCommunityPost, getCommunityPosts, type CommunityPostPriority } from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
@@ -219,8 +220,9 @@ function ClientHomePageContent() {
           setDisplayName(fullName);
           setDisplayEmail(email);
           setProfileNameInput(fullName);
-          if (me.user?.id) {
-            setMeUserId(String(me.user.id));
+          const authId = normalizeAuthUser(me.user).id;
+          if (authId) {
+            setMeUserId(authId);
           }
         }
       } catch (err) {
@@ -268,8 +270,9 @@ function ClientHomePageContent() {
         const profile = await apiGetJson<{ user: ProfileUser }>("/api/auth/profile");
         if (cancelled) return;
         const user = profile.user;
-        if (user.id) {
-          setMeUserId(String(user.id));
+        const authId = normalizeAuthUser(user).id;
+        if (authId) {
+          setMeUserId(authId);
         }
         setDisplayName(String(user.name || "").trim());
         setDisplayEmail(String(user.email || "").trim());
