@@ -171,7 +171,7 @@ function ClientHomePageContent() {
   const displayConnections = displayConnectionsRaw;
   const displayHours = displayHoursRaw;
 
-  const postsHeading = "Latest Post By CIT Community";
+  const postsHeading = "Community Feed";
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -918,46 +918,7 @@ function ClientHomePageContent() {
               </section>
             ) : (
               <>
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-                {displayName ? `Welcome back, ${displayName}!` : "Welcome back!"}
-              </h1>
-              <p className="mt-2 text-sm text-zinc-500">Here&apos;s what&apos;s happening in your learning community</p>
-
-              <div className="mt-8 grid gap-5 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => router.push("/client-home?panel=connections")}
-                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
-                      <Users className="h-6 w-6" strokeWidth={1.75} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-zinc-900">Active Connections</p>
-                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                        Students you&apos;re helping or getting help from
-                      </p>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/client-home?panel=hours")}
-                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
-                      <Clock className="h-6 w-6" strokeWidth={1.75} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-zinc-900">Hours This Week</p>
-                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">Time spent in peer collaboration</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
+              
               <hr className="my-10 border-zinc-200" />
 
               <h2 className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">{postsHeading}</h2>
