@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getCommunityPosts } from "@/app/lib/postsStorage";
 import { useFreelancerDashboardUser } from "../FreelancerDashboardShell";
 import { connectSocket, getChatSocket, sendChatMessageWithClientId } from "@/app/lib/socket";
 
 export default function FreelancerBrowsePage() {
+  const searchParams = useSearchParams();
   const { user } = useFreelancerDashboardUser();
   const [posts, setPosts] = useState(() => getCommunityPosts());
   const [sentStateByPostId, setSentStateByPostId] = useState<Record<string, boolean>>({});
+  const selectedPostId = searchParams.get("post") || "";
 
   useEffect(() => {
     const loadPosts = () => setPosts(getCommunityPosts());
@@ -20,6 +23,13 @@ export default function FreelancerBrowsePage() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!selectedPostId) return;
+    const element = document.getElementById(`browse-post-${selectedPostId}`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [selectedPostId, posts]);
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -58,7 +68,10 @@ export default function FreelancerBrowsePage() {
         {posts.map((post) => (
           <article
             key={post.id}
-            className="group rounded-2xl border border-zinc-100 bg-zinc-50/70 p-5 transition duration-200 sm:p-6 lg:p-7 hover:border-[#FF6B35]/45 hover:bg-[#FFF8F5] hover:shadow-[0_8px_28px_rgba(255,107,53,0.08)]"
+            id={`browse-post-${post.id}`}
+            className={`group cursor-pointer rounded-2xl border bg-zinc-50/70 p-5 transition duration-200 sm:p-6 lg:p-7 hover:border-[#FF6B35]/45 hover:bg-[#FFF8F5] hover:shadow-[0_8px_28px_rgba(255,107,53,0.08)] ${
+              selectedPostId === post.id ? "border-[#FF6B35] shadow-[0_8px_28px_rgba(255,107,53,0.12)]" : "border-zinc-100"
+            }`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
