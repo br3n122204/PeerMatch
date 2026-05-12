@@ -40,19 +40,12 @@ type PostItem = {
   id: string;
   authorId: string;
   author: string;
+  createdAt: string;
   timeAgo: string;
   title: string;
   content: string;
   category: string;
   priority: "Normal" | "Important";
-  avatar: string;
-};
-
-type ActivityItem = {
-  id: string;
-  name: string;
-  message: string;
-  timeAgo: string;
   avatar: string;
 };
 
@@ -160,8 +153,8 @@ function ClientHomePageContent() {
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
-  const recentActivities: ActivityItem[] = [];
   const notifications: string[] = [];
+  const [now, setNow] = useState(() => Date.now());
 
   const activeConnections: number | null | undefined = undefined;
   const hoursThisWeek: number | null | undefined = undefined;
@@ -173,6 +166,7 @@ function ClientHomePageContent() {
   const displayHours = displayHoursRaw;
 
   const postsHeading = "Community Feed";
+  const oneDayMs = 24 * 60 * 60 * 1000;
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -194,6 +188,7 @@ function ClientHomePageContent() {
     id: post.id,
     authorId: post.authorId,
     author: post.authorName || "Client User",
+    createdAt: post.createdAt,
     timeAgo: formatTimeAgo(post.createdAt),
     title: post.title,
     content: post.content,
@@ -250,6 +245,13 @@ function ClientHomePageContent() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [profilePhotoDataUrl]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -354,6 +356,12 @@ function ClientHomePageContent() {
   ]);
 
   const canSaveProfile = hasUnsavedProfileChanges && profileLoaded && !profileSaving;
+  const recentPost = useMemo(() => {
+    return posts.find((post) => {
+      const createdAtMs = new Date(post.createdAt).getTime();
+      return Number.isFinite(createdAtMs) && now - createdAtMs < oneDayMs;
+    });
+  }, [posts, now, oneDayMs]);
 
   const handleProfilePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -424,6 +432,7 @@ function ClientHomePageContent() {
           id: created.id,
           authorId: created.authorId,
           author: created.authorName,
+          createdAt: created.createdAt,
           timeAgo: "Just now",
           title: created.title,
           content: created.content,
@@ -933,7 +942,7 @@ function ClientHomePageContent() {
                       key={post.id}
                       type="button"
                       onClick={() => router.push(`/client-home?post=${encodeURIComponent(post.id)}`)}
-                      className="block w-full rounded-2xl border border-zinc-100 bg-zinc-50 p-5 text-left hover:bg-zinc-100 lg:p-7"
+                      className="block w-full cursor-pointer rounded-2xl border border-zinc-100 bg-zinc-50 p-5 text-left hover:bg-zinc-100 lg:p-7"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -1002,57 +1011,23 @@ function ClientHomePageContent() {
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-zinc-900">Recent Activities</h3>
+            <h3 className="text-sm font-semibold text-zinc-900">Recent Post</h3>
             <div className="mt-3 space-y-3">
-            {recentActivities.length === 0 ? (
-              <>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Daddy</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">2 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Allosaur</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">15 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Hero</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">1 hr ago</p>
-                </div>
-              </>
+            {recentPost ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/client-home?post=${encodeURIComponent(recentPost.id)}`)}
+                className="w-full cursor-pointer rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm transition hover:bg-[#efe4dd]"
+              >
+                <p className="text-sm font-semibold text-zinc-900">{recentPost.author}</p>
+                <p className="mt-2 line-clamp-1 text-xs font-semibold text-zinc-800">{recentPost.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-zinc-700">{recentPost.content}</p>
+                <p className="mt-3 text-xs text-zinc-500">{formatTimeAgo(recentPost.createdAt)}</p>
+              </button>
             ) : (
-              recentActivities.map((activity) => (
-                <button
-                  key={activity.id}
-                  type="button"
-                  onClick={() => router.push(`/client-home?activity=${encodeURIComponent(activity.id)}`)}
-                  className="w-full rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm hover:bg-[#efe4dd]"
-                >
-                  <div className="flex gap-2">
-                    <img
-                      src={activity.avatar}
-                      alt={`${activity.name} avatar`}
-                      className="h-6 w-6 rounded-full border border-zinc-300"
-                    />
-                    <div>
-                      <p className="text-xs font-semibold text-zinc-900">{activity.name}</p>
-                      <p className="text-[11px] text-zinc-700">{activity.message}</p>
-                      <p className="text-[10px] text-zinc-500">{activity.timeAgo}</p>
-                    </div>
-                  </div>
-                </button>
-              ))
+              <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
+                <p className="text-sm font-semibold text-zinc-900">No recent post</p>
+              </div>
             )}
             </div>
           </section>
