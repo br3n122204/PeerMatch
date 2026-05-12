@@ -38,7 +38,7 @@ function parsePosts(raw: string | null): CommunityPost[] {
         title: String(item.title || "").trim(),
         content: String(item.content || "").trim(),
         category: String(item.category || "").trim(),
-        priority: item.priority === "Important" ? "Important" : "Normal",
+        priority: (item.priority === "Important" ? "Important" : "Normal") as CommunityPostPriority,
         createdAt: String(item.createdAt || ""),
       }))
       .filter((item) => item.id && item.authorId && item.title && item.content);
