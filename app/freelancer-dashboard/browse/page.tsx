@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getCommunityPosts } from "@/app/lib/postsStorage";
+import { FREELANCER_OFFERS_STORAGE_KEY, hasFreelancerOfferForPost } from "@/app/lib/freelancerOffersStorage";
 import { useFreelancerDashboardUser } from "../FreelancerDashboardShell";
-import { connectSocket, getChatSocket, sendChatMessageWithClientId } from "@/app/lib/socket";
+import { FreelancerCommunityPostCard } from "@/app/components/freelancer/FreelancerCommunityPostCard";
+import { OfferHelpView } from "@/app/components/freelancer/OfferHelpView";
 
 export default function FreelancerBrowsePage() {
   const searchParams = useSearchParams();
@@ -17,8 +19,8 @@ export default function FreelancerBrowsePage() {
     const loadPosts = () => setPosts(getCommunityPosts());
     loadPosts();
     const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
+      if (!event.key || event.key === "peermatch_community_posts_v1") loadPosts();
+      if (!event.key || event.key === FREELANCER_OFFERS_STORAGE_KEY) setOfferSentTick((n) => n + 1);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -47,18 +49,18 @@ export default function FreelancerBrowsePage() {
   const handleOfferHelp = (post: ReturnType<typeof getCommunityPosts>[number]) => {
     if (!user?.id) return;
 
-    const clientId = String(post.authorId || "").trim();
-    if (!clientId || clientId === user.id) return;
+  const selectedPost = useMemo(
+    () => (selectedPostId ? posts.find((p) => p.id === selectedPostId) ?? null : null),
+    [posts, selectedPostId],
+  );
 
-    connectSocket(user.id);
-    const socket = getChatSocket();
-    if (!socket?.connected) return;
+  const handleOfferRecorded = () => setOfferSentTick((n) => n + 1);
 
-    const predefinedMessage = `Hi ${post.authorName || "there"}, I saw your post "${post.title}" and I can help you with this. Let me know what you need most, and I can start right away.`;
-    const clientMessageId = `offer-help-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    sendChatMessageWithClientId(clientId, predefinedMessage, clientMessageId);
-    setSentStateByPostId((prev) => ({ ...prev, [post.id]: true }));
-  };
+  const offerSentIds = useMemo(() => {
+    const uid = user?.id;
+    if (!uid) return new Set<string>();
+    return new Set(posts.filter((p) => hasFreelancerOfferForPost(uid, p.id)).map((p) => p.id));
+  }, [posts, user?.id, offerSentTick]);
 
   return (
     <main className="h-full rounded-2xl border border-zinc-100/80 bg-white p-6 shadow-[0_4px_32px_rgba(15,23,42,0.04)] sm:p-8 lg:p-10">
