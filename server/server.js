@@ -14,7 +14,7 @@ const { attachSocketServer } = require('./socket/socketServer');
 dotenv.config();
 
 const rawOrigins =
-  process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:5174';
+  process.env.CORS_ORIGINS || 'http://localhost:3000';
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 const app = express();

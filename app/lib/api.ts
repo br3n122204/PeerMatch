@@ -131,6 +131,75 @@ export async function apiGetJson<TResponse>(
   return payload as TResponse;
 }
 
+export async function apiPatchJson<TResponse>(
+  path: string,
+  body: unknown,
+  init?: Omit<RequestInit, "method" | "body" | "headers">
+): Promise<TResponse> {
+  const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      credentials: "include",
+      ...init,
+    });
+  } catch {
+    throw new ApiError("Cannot connect to the server. Please make sure the API is running and try again.", 0);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  const payload = isJson
+    ? await res.json().catch(() => undefined)
+    : await res.text().catch(() => undefined);
+
+  if (!res.ok) {
+    const messageFromPayload = (payload as ApiErrorPayload | undefined)?.message;
+    const message: string = typeof messageFromPayload === "string" ? messageFromPayload : "Request failed.";
+
+    throw new ApiError(message, res.status, payload);
+  }
+
+  return payload as TResponse;
+}
+
+export async function apiSend(
+  path: string,
+  method: "POST",
+  init?: Omit<RequestInit, "method" | "body" | "headers">
+): Promise<void> {
+  const url = `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      credentials: "include",
+      ...init,
+    });
+  } catch {
+    throw new ApiError("Cannot connect to the server. Please make sure the API is running and try again.", 0);
+  }
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json");
+    const payload = isJson
+      ? await res.json().catch(() => undefined)
+      : await res.text().catch(() => undefined);
+    const messageFromPayload = (payload as ApiErrorPayload | undefined)?.message;
+    const message: string = typeof messageFromPayload === "string" ? messageFromPayload : "Request failed.";
+    throw new ApiError(message, res.status, payload);
+  }
+}
+
 export async function apiDeleteJson<TResponse>(
   path: string,
   init?: Omit<RequestInit, "method" | "headers">,
