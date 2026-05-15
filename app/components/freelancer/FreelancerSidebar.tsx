@@ -26,6 +26,8 @@ export function FreelancerSidebar() {
     { href: "/freelancer-dashboard/profile", label: "Profile", icon: <User className="h-5 w-5 shrink-0" strokeWidth={1.75} /> },
   ];
 
+  const isMessagesRoute = pathname === "/freelancer-dashboard/messages";
+
   const isActive = (href: string) => {
     if (href === "/freelancer-dashboard") return pathname === "/freelancer-dashboard";
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -42,7 +44,11 @@ export function FreelancerSidebar() {
   };
 
   return (
-    <aside className="sticky top-6 flex h-[calc(100vh-3rem)] min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+    <aside
+      className={`flex min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm ${
+        isMessagesRoute ? "h-full" : "sticky top-6 h-[calc(100vh-3rem)]"
+      }`}
+    >
       <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
         <Image src="/logo.png" alt="PeerMatch" width={32} height={32} className="h-8 w-8 object-contain" />
         <div className="min-w-0 leading-tight">

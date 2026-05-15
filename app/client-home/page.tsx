@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   BookOpen,
   CalendarDays,
   ChevronDown,
+  CircleDollarSign,
   CirclePlus,
   Clock,
   FilePenLine,
@@ -24,34 +25,45 @@ import {
   MessageSquareQuote,
   ShieldAlert,
   Send,
+  Sparkles,
   Star,
   Upload,
   UserCircle,
   User,
-  Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
-import { createCommunityPost, getCommunityPosts, type CommunityPostPriority } from "../lib/postsStorage";
+import {
+  fetchApprovedCommunityPosts,
+  formatPhpBudget,
+  POST_REVIEW_MESSAGE,
+  suggestTaskBudget,
+  urgencyBadgeClass,
+  URGENCY_OPTIONS,
+  type BudgetSuggestion,
+} from "../lib/communityPosts";
+import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
+import {
+  clearCommunityPostsStorage,
+  COMMUNITY_POSTS_CHANGED_EVENT,
+  isCommunityPostWithinLast24Hours,
+  notifyCommunityPostsChanged,
+  type CommunityPostPriority,
+} from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
+import { ClientPostToast, type ClientPostToastState } from "../components/ClientPostToast";
 
 type PostItem = {
   id: string;
   authorId: string;
   author: string;
   timeAgo: string;
+  createdAt: string;
   title: string;
   content: string;
   category: string;
-  priority: "Normal" | "Important";
-  avatar: string;
-};
-
-type ActivityItem = {
-  id: string;
-  name: string;
-  message: string;
-  timeAgo: string;
+  priority: CommunityPostPriority;
+  budget: number;
   avatar: string;
 };
 
@@ -156,11 +168,16 @@ function ClientHomePageContent() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [postCategoryInput, setPostCategoryInput] = useState("");
   const [postPriorityInput, setPostPriorityInput] = useState<CommunityPostPriority>("Normal");
+  const [postSubmitting, setPostSubmitting] = useState(false);
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
+  const [postBudgetInput, setPostBudgetInput] = useState("");
+  const [rateSuggestion, setRateSuggestion] = useState<BudgetSuggestion | null>(null);
+  const [rateSuggestLoading, setRateSuggestLoading] = useState(false);
+  const [rateSuggestMessage, setRateSuggestMessage] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
-  const recentActivities: ActivityItem[] = [];
-  const notifications: string[] = [];
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [postToast, setPostToast] = useState<ClientPostToastState>(null);
 
   const activeConnections: number | null | undefined = undefined;
   const hoursThisWeek: number | null | undefined = undefined;
@@ -171,7 +188,12 @@ function ClientHomePageContent() {
   const displayConnections = displayConnectionsRaw;
   const displayHours = displayHoursRaw;
 
-  const postsHeading = "Latest Post By CIT Community";
+  const postsHeading = "Community Feed";
+
+  const recentPosts = useMemo(
+    () => posts.filter((post) => isCommunityPostWithinLast24Hours(post.createdAt)),
+    [posts],
+  );
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -187,17 +209,30 @@ function ClientHomePageContent() {
   };
 
   const mapPostForUi = (
-    post: ReturnType<typeof getCommunityPosts>[number],
+    post: {
+      id: string;
+      authorId: string;
+      authorName: string;
+      createdAt: string;
+      title: string;
+      content: string;
+      category: string;
+      priority: CommunityPostPriority;
+      budget?: number;
+      authorAvatarDataUrl?: string;
+    },
     fallbackAvatar: string,
   ): PostItem => ({
     id: post.id,
     authorId: post.authorId,
     author: post.authorName || "Client User",
     timeAgo: formatTimeAgo(post.createdAt),
+    createdAt: post.createdAt,
     title: post.title,
     content: post.content,
     category: post.category || "General",
     priority: post.priority,
+    budget: typeof post.budget === "number" ? post.budget : 0,
     avatar: post.authorAvatarDataUrl || fallbackAvatar,
   });
 
@@ -234,20 +269,23 @@ function ClientHomePageContent() {
     };
   }, [router]);
 
-  useEffect(() => {
-    const loadPosts = () => {
-      const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
-      const nextPosts = getCommunityPosts().map((post) => mapPostForUi(post, fallbackAvatar));
-      setPosts(nextPosts);
-    };
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+  const loadFeedPosts = useCallback(async () => {
+    const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
+    try {
+      const feed = await fetchApprovedCommunityPosts();
+      setPosts(feed.map((post) => mapPostForUi(post, fallbackAvatar)));
+      clearCommunityPostsStorage();
+    } catch {
+      setPosts([]);
+    }
   }, [profilePhotoDataUrl]);
+
+  useEffect(() => {
+    void loadFeedPosts();
+    const onRefresh = () => void loadFeedPosts();
+    window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+    return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+  }, [loadFeedPosts]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -312,7 +350,10 @@ function ClientHomePageContent() {
     }
   };
 
-  const featuredWork: Array<{ title: string; category: string; rating: number; reviews: number }> = [];
+  const myFeaturedPosts = useMemo(
+    () => (meUserId ? posts.filter((post) => post.authorId === meUserId) : []),
+    [posts, meUserId],
+  );
   const skillsAndExpertise: string[] = profileSkillsInput
     .split(",")
     .map((item) => item.trim())
@@ -395,47 +436,86 @@ function ClientHomePageContent() {
     }
   };
 
+  const handleSuggestRate = () => {
+    const category = postCategoryInput.trim();
+    const title = postTitleInput.trim();
+    const content = postDescriptionInput.trim();
+    if (!category || !title || !content) {
+      setRateSuggestMessage("Fill in category, title, and description first.");
+      return;
+    }
+    if (rateSuggestLoading) return;
+    void (async () => {
+      setRateSuggestLoading(true);
+      setRateSuggestMessage("");
+      try {
+        const suggestion = await suggestTaskBudget({
+          title,
+          description: content,
+          subjectCategory: category,
+          urgency: postPriorityInput.toLowerCase(),
+        });
+        setRateSuggestion(suggestion);
+        setRateSuggestMessage("");
+        if (!postBudgetInput.trim()) {
+          setPostBudgetInput(String(suggestion.suggestedBudget));
+        }
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Could not get a rate suggestion.";
+        setRateSuggestMessage(message);
+      } finally {
+        setRateSuggestLoading(false);
+      }
+    })();
+  };
+
   const handleCreatePost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const category = postCategoryInput.trim();
     const title = postTitleInput.trim();
     const content = postDescriptionInput.trim();
+    const budgetRaw = postBudgetInput.trim();
+    const budget = Number(budgetRaw.replace(/,/g, ""));
     if (!category || !title || !content || !meUserId) {
       setPostStatusMessage("Please complete category, title, and description.");
       return;
     }
-    const created = createCommunityPost({
-      authorId: meUserId,
-      authorName: profileNameInput.trim() || displayName || "Client User",
-      authorEmail: displayEmail,
-      authorAccountType: "client",
-      authorAvatarDataUrl: profilePhotoDataUrl || undefined,
-      category,
-      title,
-      content,
-      priority: postPriorityInput,
-    });
-    setPosts((prev) =>
-      [
-        {
-          id: created.id,
-          authorId: created.authorId,
-          author: created.authorName,
-          timeAgo: "Just now",
-          title: created.title,
-          content: created.content,
-          category: created.category,
-          priority: created.priority,
-          avatar: created.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client",
-        },
-        ...prev,
-      ].filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index),
-    );
-    setPostCategoryInput("");
-    setPostPriorityInput("Normal");
-    setPostTitleInput("");
-    setPostDescriptionInput("");
-    setPostStatusMessage("Post published.");
+    if (!budgetRaw || !Number.isFinite(budget) || budget < 50) {
+      setPostStatusMessage("Enter a valid budget of at least ₱50.");
+      return;
+    }
+    if (postSubmitting) return;
+    void (async () => {
+      setPostSubmitting(true);
+      setPostStatusMessage("");
+      try {
+        await apiPostJson<{ message: string }>("/api/tasks", {
+          title,
+          description: content,
+          subjectCategory: category,
+          urgency: postPriorityInput.toLowerCase(),
+          budget: Math.round(budget),
+        });
+        setPostCategoryInput("");
+        setPostPriorityInput("Normal");
+        setPostTitleInput("");
+        setPostDescriptionInput("");
+        setPostBudgetInput("");
+        setRateSuggestion(null);
+        setRateSuggestMessage("");
+        setPostToast({ variant: "pending", message: POST_REVIEW_MESSAGE });
+        setNotifications((prev) =>
+          [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
+        );
+        notifyCommunityPostsChanged();
+        await loadFeedPosts();
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Could not save your post. Please try again.";
+        setPostStatusMessage(message);
+      } finally {
+        setPostSubmitting(false);
+      }
+    })();
   };
 
   const navItems = [
@@ -508,7 +588,7 @@ function ClientHomePageContent() {
 
         <main
           className={`flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white shadow-[0_4px_32px_rgba(15,23,42,0.04)] ${
-            activePanel === "profile" || activePanel === "messages"
+            activePanel === "profile" || activePanel === "featured-post" || activePanel === "messages"
               ? "p-4"
               : "p-6 sm:p-8 lg:p-10"
           } ${activePanel === "messages" ? "overflow-hidden" : ""}`}
@@ -536,17 +616,17 @@ function ClientHomePageContent() {
                           <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
                             <BookOpen className="h-3.5 w-3.5" strokeWidth={2} />
                           </span>
-                          Subject Category
+                          Category
                         </label>
                         <input
                           id="post-category"
                           type="text"
                           value={postCategoryInput}
                           onChange={(event) => setPostCategoryInput(event.target.value)}
-                          placeholder="e.g. Mathematics, Physics, History"
+                          placeholder="e.g. Tutoring, Design, Moving help, Errands"
                           className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                         />
-                        <p className="mt-1.5 text-[11px] text-zinc-500">What subject do you need help with?</p>
+                        <p className="mt-1.5 text-[11px] text-zinc-500">What type of help or request is this?</p>
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -564,13 +644,14 @@ function ClientHomePageContent() {
                             <select
                               id="post-urgency"
                               value={postPriorityInput}
-                              onChange={(event) =>
-                                setPostPriorityInput(event.target.value === "Important" ? "Important" : "Normal")
-                              }
+                              onChange={(event) => setPostPriorityInput(event.target.value as CommunityPostPriority)}
                               className="h-11 w-full appearance-none rounded-xl border border-zinc-300 bg-white px-3 pr-9 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                             >
-                              <option value="Normal">Normal</option>
-                              <option value="Important">Important</option>
+                              {URGENCY_OPTIONS.map((level) => (
+                                <option key={level} value={level}>
+                                  {level}
+                                </option>
+                              ))}
                             </select>
                             <ChevronDown
                               aria-hidden="true"
@@ -621,13 +702,70 @@ function ClientHomePageContent() {
                         <p className="mt-1.5 text-[11px] text-zinc-500">Detailed descriptions get better responses</p>
                       </div>
 
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label
+                            htmlFor="post-budget"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                          >
+                            <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                              <CircleDollarSign className="h-3.5 w-3.5" strokeWidth={2} />
+                            </span>
+                            Budget (PHP)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleSuggestRate}
+                            disabled={rateSuggestLoading}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#FFD4C2] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#C2410C] transition hover:bg-[#FFF2EB] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+                            {rateSuggestLoading ? "Consulting AI…" : "Suggest fair rate"}
+                          </button>
+                        </div>
+                        <div className="relative mt-1.5">
+                          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-zinc-500">
+                            ₱
+                          </span>
+                          <input
+                            id="post-budget"
+                            type="number"
+                            min={50}
+                            step={50}
+                            value={postBudgetInput}
+                            onChange={(event) => setPostBudgetInput(event.target.value)}
+                            placeholder="e.g. 800"
+                            className="h-11 w-full rounded-xl border border-zinc-300 bg-white py-2 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-zinc-500">
+                          How much you are willing to pay a peer for this help (Philippine Peso).
+                        </p>
+                        {rateSuggestion ? (
+                          <div className="mt-2 rounded-xl border border-[#FFD4C2] bg-[#FFF8F4] px-3 py-2.5 text-[11px] leading-5 text-zinc-700">
+                            <p className="font-semibold text-zinc-900">
+                              Suggested range: {formatPhpBudget(rateSuggestion.minBudget)} –{" "}
+                              {formatPhpBudget(rateSuggestion.maxBudget)}
+                              <span className="ml-1 font-normal text-zinc-500">
+                                (typical: {formatPhpBudget(rateSuggestion.suggestedBudget)})
+                              </span>
+                            </p>
+                            <p className="mt-1 text-zinc-600">{rateSuggestion.rationale}</p>
+                          </div>
+                        ) : null}
+                        {rateSuggestMessage ? (
+                          <p className="mt-1.5 text-[11px] text-[#C2410C]">{rateSuggestMessage}</p>
+                        ) : null}
+                      </div>
+
                       <div className="flex items-center gap-2 pt-2">
                         <button
                           type="submit"
-                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF6B35] px-4 text-sm font-semibold text-white transition hover:brightness-95"
+                          disabled={postSubmitting}
+                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF6B35] px-4 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <Send className="h-4 w-4" strokeWidth={2} />
-                          <span>Post Request</span>
+                          <span>{postSubmitting ? "Submitting…" : "Post Request"}</span>
                         </button>
                         <button
                           type="button"
@@ -636,15 +774,19 @@ function ClientHomePageContent() {
                             setPostPriorityInput("Normal");
                             setPostTitleInput("");
                             setPostDescriptionInput("");
+                            setPostBudgetInput("");
+                            setRateSuggestion(null);
+                            setRateSuggestMessage("");
                             setPostStatusMessage("");
+                            setPostToast(null);
                           }}
                           className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-700 transition hover:bg-zinc-50"
                         >
                           Clear
                         </button>
                       </div>
-                      {postStatusMessage ? (
-                        <p className={`text-xs ${postStatusMessage === "Post published." ? "text-[#FF6B35]" : "text-red-600"}`}>
+                      {postStatusMessage && postStatusMessage !== POST_REVIEW_MESSAGE ? (
+                        <p className="text-xs text-red-600" role="alert">
                           {postStatusMessage}
                         </p>
                       ) : null}
@@ -660,7 +802,7 @@ function ClientHomePageContent() {
                       <ul className="mt-3 space-y-1.5 text-xs leading-5 text-zinc-600">
                         <li>- Be specific about what you need</li>
                         <li>- Set realistic deadlines</li>
-                        <li>- Offer fair rates</li>
+                        <li>- Use AI to find a fair PHP rate, then set your budget</li>
                         <li>- Provide context for your request</li>
                       </ul>
                     </aside>
@@ -681,8 +823,11 @@ function ClientHomePageContent() {
                   />
                 </div>
               </section>
-            ) : activePanel === "profile" ? (
-              <section aria-labelledby="profile-heading" className="flex min-h-0 flex-1 flex-col">
+            ) : activePanel === "profile" || activePanel === "featured-post" ? (
+              <section
+                aria-labelledby={activePanel === "featured-post" ? "featured-post-heading" : "profile-heading"}
+                className="flex min-h-0 flex-1 flex-col"
+              >
                 <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
                   <article className="sticky top-4 z-10 h-fit w-full max-w-[320px] rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm xl:max-w-none">
                     <div className="mx-auto h-24 w-24 overflow-hidden rounded-full border border-zinc-200 bg-[#E8EFEC]">
@@ -756,6 +901,10 @@ function ClientHomePageContent() {
                   </article>
 
                   <div className="profile-scroll-pane max-h-[calc(100vh-3.5rem)] min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] scroll-smooth">
+                    {activePanel === "featured-post" ? (
+                      <FeaturedPostEditor authorId={meUserId} authorAvatar={profilePhotoDataUrl || undefined} />
+                    ) : (
+                      <>
                     <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
                         <UserCircle className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
@@ -828,25 +977,37 @@ function ClientHomePageContent() {
                       />
                     </article>
 
-                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                    <Link
+                      href="/client-home?panel=featured-post"
+                      className="block rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm transition hover:border-[#FF6B35]/40 hover:bg-[#FFF9F6]"
+                    >
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
                         <FileText className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
                         Featured Post
                       </h2>
-                      {featuredWork.length > 0 ? (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          {featuredWork.map((work) => (
-                            <div key={work.title} className="rounded-xl border border-zinc-200 bg-white p-3">
-                              <div className="h-20 rounded-lg bg-[#E8EFEC]" />
-                              <p className="mt-2 text-sm font-semibold text-zinc-900">{work.title}</p>
-                              <p className="text-xs text-zinc-500">{work.category}</p>
+                      {myFeaturedPosts.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {myFeaturedPosts.slice(0, 3).map((post) => (
+                            <div key={post.id} className="rounded-xl border border-zinc-200 bg-white p-3">
+                              <p className="truncate text-sm font-semibold text-zinc-900">{post.title}</p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <p className="text-xs text-zinc-500">{post.category}</p>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${urgencyBadgeClass(post.priority)}`}
+                                >
+                                  {post.priority}
+                                </span>
+                              </div>
                             </div>
                           ))}
+                          <p className="text-xs font-medium text-[#FF6B35]">Manage featured posts →</p>
                         </div>
                       ) : (
-                        <div className="mt-3 min-h-20 rounded-xl border border-dashed border-zinc-300 bg-white" />
+                        <div className="mt-3 flex min-h-20 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white px-4 text-center text-sm text-zinc-500">
+                          Add or manage your posts
+                        </div>
                       )}
-                    </article>
+                    </Link>
 
                     <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
@@ -913,53 +1074,13 @@ function ClientHomePageContent() {
                         {profileSaving ? "Saving..." : "Save Updates"}
                       </button>
                     </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </section>
             ) : (
               <>
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-                {displayName ? `Welcome back, ${displayName}!` : "Welcome back!"}
-              </h1>
-              <p className="mt-2 text-sm text-zinc-500">Here&apos;s what&apos;s happening in your learning community</p>
-
-              <div className="mt-8 grid gap-5 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => router.push("/client-home?panel=connections")}
-                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
-                      <Users className="h-6 w-6" strokeWidth={1.75} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-zinc-900">Active Connections</p>
-                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                        Students you&apos;re helping or getting help from
-                      </p>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/client-home?panel=hours")}
-                  className="rounded-2xl border border-zinc-100 bg-white p-6 text-left shadow-[0_4px_24px_rgba(15,23,42,0.06)] hover:bg-zinc-50 md:p-7"
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF2EB] text-[#FF6B35]">
-                      <Clock className="h-6 w-6" strokeWidth={1.75} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-zinc-900">Hours This Week</p>
-                      <p className="mt-2 text-sm leading-relaxed text-zinc-500">Time spent in peer collaboration</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              <hr className="my-10 border-zinc-200" />
-
               <h2 className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">{postsHeading}</h2>
 
               <div className="mt-5 space-y-4">
@@ -988,14 +1109,15 @@ function ClientHomePageContent() {
                             {post.category}
                           </span>
                           <span
-                            className={`rounded-full px-4 py-1 text-xs font-semibold ${
-                              post.priority === "Important"
-                                ? "bg-[#FFC31E] text-zinc-900"
-                                : "bg-[#56BA54] text-zinc-900"
-                            }`}
+                            className={`rounded-full px-4 py-1 text-xs font-semibold ${urgencyBadgeClass(post.priority)}`}
                           >
                             {post.priority}
                           </span>
+                          {post.budget > 0 ? (
+                            <span className="rounded-full bg-[#FFF2EB] px-4 py-1 text-xs font-semibold text-[#C2410C]">
+                              {formatPhpBudget(post.budget)}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <p className="mt-4 text-2xl font-semibold leading-tight text-zinc-900">{post.title}</p>
@@ -1024,69 +1146,48 @@ function ClientHomePageContent() {
                 </span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => router.push("/client-home?panel=notifications")}
-                className="mt-3 w-full rounded-xl border border-zinc-200 bg-white px-4 py-4 text-left text-xs text-zinc-700 shadow-sm hover:bg-zinc-50"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Bell aria-hidden="true" className="h-4 w-4 text-zinc-600" strokeWidth={1.6} />
-                  <span>{notifications[0]}</span>
-                </span>
-              </button>
+              <div className="mt-3 space-y-2">
+                {notifications.map((notice) => (
+                  <button
+                    key={notice}
+                    type="button"
+                    onClick={() => router.push("/client-home?panel=notifications")}
+                    className={`w-full rounded-xl border px-4 py-4 text-left text-xs shadow-sm hover:brightness-[0.98] ${
+                      notice.includes("approved")
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : notice.includes("review")
+                          ? "border-[#FFD4C2] bg-[#FFF2EB] text-[#9A3412]"
+                          : "border-zinc-200 bg-white text-zinc-700"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Bell aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.6} />
+                      <span>{notice}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-zinc-900">Recent Activities</h3>
+            <h3 className="text-sm font-semibold text-zinc-900">Recent Posts</h3>
             <div className="mt-3 space-y-3">
-            {recentActivities.length === 0 ? (
-              <>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Daddy</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">2 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Allosaur</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">15 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Hero</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">1 hr ago</p>
-                </div>
-              </>
+            {recentPosts.length === 0 ? (
+              <p className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-xs text-zinc-500 shadow-sm">
+                No recent post
+              </p>
             ) : (
-              recentActivities.map((activity) => (
+              recentPosts.map((post) => (
                 <button
-                  key={activity.id}
+                  key={post.id}
                   type="button"
-                  onClick={() => router.push(`/client-home?activity=${encodeURIComponent(activity.id)}`)}
+                  onClick={() => router.push(`/client-home?post=${encodeURIComponent(post.id)}`)}
                   className="w-full rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm hover:bg-[#efe4dd]"
                 >
-                  <div className="flex gap-2">
-                    <img
-                      src={activity.avatar}
-                      alt={`${activity.name} avatar`}
-                      className="h-6 w-6 rounded-full border border-zinc-300"
-                    />
-                    <div>
-                      <p className="text-xs font-semibold text-zinc-900">{activity.name}</p>
-                      <p className="text-[11px] text-zinc-700">{activity.message}</p>
-                      <p className="text-[10px] text-zinc-500">{activity.timeAgo}</p>
-                    </div>
-                  </div>
+                  <p className="text-sm font-semibold text-zinc-900">{post.author}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-snug text-zinc-700">{post.title}</p>
+                  <p className="mt-3 text-xs text-zinc-500">{post.timeAgo}</p>
                 </button>
               ))
             )}
@@ -1094,6 +1195,7 @@ function ClientHomePageContent() {
           </section>
         </aside>
       </div>
+      <ClientPostToast toast={postToast} onDismiss={() => setPostToast(null)} />
     </div>
   );
 }
