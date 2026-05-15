@@ -31,7 +31,12 @@ import {
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
-import { createCommunityPost, getCommunityPosts, type CommunityPostPriority } from "../lib/postsStorage";
+import {
+  createCommunityPost,
+  getCommunityPosts,
+  isCommunityPostWithinLast24Hours,
+  type CommunityPostPriority,
+} from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
 
@@ -40,18 +45,11 @@ type PostItem = {
   authorId: string;
   author: string;
   timeAgo: string;
+  createdAt: string;
   title: string;
   content: string;
   category: string;
   priority: "Normal" | "Important";
-  avatar: string;
-};
-
-type ActivityItem = {
-  id: string;
-  name: string;
-  message: string;
-  timeAgo: string;
   avatar: string;
 };
 
@@ -159,7 +157,6 @@ function ClientHomePageContent() {
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
-  const recentActivities: ActivityItem[] = [];
   const notifications: string[] = [];
 
   const activeConnections: number | null | undefined = undefined;
@@ -172,6 +169,11 @@ function ClientHomePageContent() {
   const displayHours = displayHoursRaw;
 
   const postsHeading = "Latest Post By CIT Community";
+
+  const recentPosts = useMemo(
+    () => posts.filter((post) => isCommunityPostWithinLast24Hours(post.createdAt)),
+    [posts],
+  );
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -194,6 +196,7 @@ function ClientHomePageContent() {
     authorId: post.authorId,
     author: post.authorName || "Client User",
     timeAgo: formatTimeAgo(post.createdAt),
+    createdAt: post.createdAt,
     title: post.title,
     content: post.content,
     category: post.category || "General",
@@ -1038,56 +1041,22 @@ function ClientHomePageContent() {
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-zinc-900">Recent Activities</h3>
+            <h3 className="text-sm font-semibold text-zinc-900">Recent Posts</h3>
             <div className="mt-3 space-y-3">
-            {recentActivities.length === 0 ? (
-              <>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Daddy</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">2 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Allosaur</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">15 min ago</p>
-                </div>
-                <div className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-semibold text-zinc-900">Hero</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="h-2 w-full max-w-[180px] rounded-full bg-zinc-300/80" />
-                    <div className="h-2 w-full max-w-[140px] rounded-full bg-zinc-300/60" />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">1 hr ago</p>
-                </div>
-              </>
+            {recentPosts.length === 0 ? (
+              <p className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-xs text-zinc-500 shadow-sm">
+                No recent post
+              </p>
             ) : (
-              recentActivities.map((activity) => (
-                <button
-                  key={activity.id}
-                  type="button"
-                  onClick={() => router.push(`/client-home?activity=${encodeURIComponent(activity.id)}`)}
-                  className="w-full rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm hover:bg-[#efe4dd]"
+              recentPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm"
                 >
-                  <div className="flex gap-2">
-                    <img
-                      src={activity.avatar}
-                      alt={`${activity.name} avatar`}
-                      className="h-6 w-6 rounded-full border border-zinc-300"
-                    />
-                    <div>
-                      <p className="text-xs font-semibold text-zinc-900">{activity.name}</p>
-                      <p className="text-[11px] text-zinc-700">{activity.message}</p>
-                      <p className="text-[10px] text-zinc-500">{activity.timeAgo}</p>
-                    </div>
-                  </div>
-                </button>
+                  <p className="text-sm font-semibold text-zinc-900">{post.author}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-snug text-zinc-700">{post.title}</p>
+                  <p className="mt-3 text-xs text-zinc-500">{post.timeAgo}</p>
+                </div>
               ))
             )}
             </div>

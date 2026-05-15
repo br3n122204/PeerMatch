@@ -15,6 +15,13 @@ export type CommunityPost = {
 };
 
 const POSTS_KEY = "peermatch_community_posts_v1";
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+export function isCommunityPostWithinLast24Hours(createdAt: string, now = Date.now()): boolean {
+  const ts = new Date(createdAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  return now - ts < TWENTY_FOUR_HOURS_MS;
+}
 
 function safeWindow(): Window | null {
   if (typeof window === "undefined") return null;
