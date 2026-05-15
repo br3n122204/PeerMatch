@@ -392,10 +392,28 @@ function emitMessageVanishedForViewer(payload) {
   }
 }
 
+/**
+ * Emit a real-time event to every socket owned by a user (e.g. post approved).
+ * @param {string} userId
+ * @param {string} event
+ * @param {unknown} payload
+ */
+function emitToUser(userId, event, payload) {
+  if (!ioInstance) return;
+  const uid = String(userId || '').trim();
+  if (!uid) return;
+  const sockets = userIdToSocketIds.get(uid);
+  if (!sockets || sockets.size === 0) return;
+  for (const sid of sockets) {
+    ioInstance.to(sid).emit(event, payload);
+  }
+}
+
 module.exports = {
   attachSocketServer,
   emitMessageUnsent,
   emitMessageReactionUpdate,
   emitViewerRemovedMessage,
   emitMessageVanishedForViewer,
+  emitToUser,
 };

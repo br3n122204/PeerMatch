@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { Clock, Users } from "lucide-react";
 import { DashboardStatCard } from "@/app/components/freelancer/DashboardStatCard";
-import { useFreelancerDashboardUser } from "./FreelancerDashboardShell";
-import { getCommunityPosts } from "@/app/lib/postsStorage";
+import { CommunityPostCard } from "@/app/components/freelancer/CommunityPostCard";
+import { OfferHelpPanel } from "@/app/components/freelancer/OfferHelpPanel";
+import { useCommunityPosts } from "@/app/lib/useCommunityPosts";
 import {
   resolveFreelancerGreetingDisplayName,
   resolveFreelancerGreetingMode,
 } from "@/app/lib/freelancerStorage";
+import { useFreelancerDashboardUser, useFreelancerSelectedPost } from "./FreelancerDashboardShell";
 
 export default function FreelancerDashboardPage() {
-  const router = useRouter();
   const { user } = useFreelancerDashboardUser();
-  const [posts, setPosts] = useState(() => getCommunityPosts());
+  const { selectedPost, setSelectedPost, clearSelectedPost } = useFreelancerSelectedPost();
+  const posts = useCommunityPosts();
 
   const greetingName = useMemo(
     () => (user ? resolveFreelancerGreetingDisplayName(user) : ""),
@@ -26,17 +27,6 @@ export default function FreelancerDashboardPage() {
     const mode = resolveFreelancerGreetingMode(String(user.id));
     return mode === "welcome_back" ? "Welcome back" : "Welcome";
   }, [user]);
-
-  useEffect(() => {
-    const loadPosts = () => setPosts(getCommunityPosts());
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
