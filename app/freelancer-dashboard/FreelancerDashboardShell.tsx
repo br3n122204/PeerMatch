@@ -168,7 +168,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
             isMessagesRoute ? "h-full min-h-0" : "min-h-[calc(100vh-3rem)]"
           } grid`}
         >
-          <div className="min-h-0 lg:row-span-1">
+          <div className={`min-h-0 lg:row-span-1 ${isMessagesRoute ? "h-full overflow-hidden" : ""}`}>
             <FreelancerSidebar />
           </div>
           <div
@@ -180,7 +180,7 @@ export function FreelancerDashboardShell({ children }: { children: React.ReactNo
           >
             {children}
           </div>
-          <div className="min-h-0 lg:row-span-1">
+          <div className={`min-h-0 lg:row-span-1 ${isMessagesRoute ? "h-full overflow-hidden" : ""}`}>
             <FreelancerRightAside />
           </div>
         </div>

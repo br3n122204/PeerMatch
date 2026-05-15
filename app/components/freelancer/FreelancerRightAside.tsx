@@ -44,8 +44,8 @@ export function FreelancerRightAside() {
   );
 
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-8 rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
-      <section>
+    <aside className="flex h-full max-h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+      <section className="mb-6 shrink-0">
         <h3 className="text-sm font-semibold text-zinc-900">Notifications</h3>
         <div className="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-4 shadow-sm">
           <div className="flex items-start gap-3">
@@ -57,9 +57,9 @@ export function FreelancerRightAside() {
         </div>
       </section>
 
-      <section>
-        <h3 className="text-sm font-semibold text-zinc-900">Recent Posts</h3>
-        <ul className="mt-3 space-y-3">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <h3 className="shrink-0 text-sm font-semibold text-zinc-900">Recent Posts</h3>
+        <ul className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-0.5">
           {recentPosts.length === 0 ? (
             <li className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-xs text-zinc-500 shadow-sm">
               No recent post
