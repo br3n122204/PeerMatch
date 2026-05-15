@@ -3,7 +3,8 @@
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getCommunityPosts, isCommunityPostWithinLast24Hours, type CommunityPost } from "@/app/lib/postsStorage";
+import { fetchApprovedCommunityPosts } from "@/app/lib/communityPosts";
+import { isCommunityPostWithinLast24Hours, type CommunityPost } from "@/app/lib/postsStorage";
 
 function formatTimeAgo(value: string) {
   const ts = new Date(value).getTime();
@@ -23,14 +24,18 @@ export function FreelancerRightAside() {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
 
   useEffect(() => {
-    const loadPosts = () => setPosts(getCommunityPosts());
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
+    let cancelled = false;
+    (async () => {
+      try {
+        const feed = await fetchApprovedCommunityPosts();
+        if (!cancelled) setPosts(feed);
+      } catch {
+        if (!cancelled) setPosts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const recentPosts = useMemo(

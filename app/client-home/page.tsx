@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   BookOpen,
@@ -32,13 +32,17 @@ import {
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 import {
-  createCommunityPost,
-  getCommunityPosts,
-  isCommunityPostWithinLast24Hours,
-  type CommunityPostPriority,
-} from "../lib/postsStorage";
-import { disconnectSocket } from "../lib/socket";
+  fetchApprovedCommunityPosts,
+  normalizePriority,
+  POST_APPROVED_MESSAGE,
+  POST_REVIEW_MESSAGE,
+  urgencyBadgeClass,
+  URGENCY_OPTIONS,
+} from "../lib/communityPosts";
+import { isCommunityPostWithinLast24Hours, type CommunityPostPriority } from "../lib/postsStorage";
+import { connectSocket, disconnectSocket, subscribePostApproved } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
+import { ClientPostToast, type ClientPostToastState } from "../components/ClientPostToast";
 
 type PostItem = {
   id: string;
@@ -49,7 +53,7 @@ type PostItem = {
   title: string;
   content: string;
   category: string;
-  priority: "Normal" | "Important";
+  priority: CommunityPostPriority;
   avatar: string;
 };
 
@@ -154,10 +158,12 @@ function ClientHomePageContent() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [postCategoryInput, setPostCategoryInput] = useState("");
   const [postPriorityInput, setPostPriorityInput] = useState<CommunityPostPriority>("Normal");
+  const [postSubmitting, setPostSubmitting] = useState(false);
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
-  const notifications: string[] = [];
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [postToast, setPostToast] = useState<ClientPostToastState>(null);
 
   const activeConnections: number | null | undefined = undefined;
   const hoursThisWeek: number | null | undefined = undefined;
@@ -189,7 +195,17 @@ function ClientHomePageContent() {
   };
 
   const mapPostForUi = (
-    post: ReturnType<typeof getCommunityPosts>[number],
+    post: {
+      id: string;
+      authorId: string;
+      authorName: string;
+      createdAt: string;
+      title: string;
+      content: string;
+      category: string;
+      priority: CommunityPostPriority;
+      authorAvatarDataUrl?: string;
+    },
     fallbackAvatar: string,
   ): PostItem => ({
     id: post.id,
@@ -237,20 +253,67 @@ function ClientHomePageContent() {
     };
   }, [router]);
 
-  useEffect(() => {
-    const loadPosts = () => {
-      const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
-      const nextPosts = getCommunityPosts().map((post) => mapPostForUi(post, fallbackAvatar));
-      setPosts(nextPosts);
-    };
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+  const loadFeedPosts = useCallback(async () => {
+    const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
+    try {
+      const feed = await fetchApprovedCommunityPosts();
+      setPosts(feed.map((post) => mapPostForUi(post, fallbackAvatar)));
+    } catch {
+      setPosts([]);
+    }
   }, [profilePhotoDataUrl]);
+
+  useEffect(() => {
+    void loadFeedPosts();
+  }, [loadFeedPosts]);
+
+  useEffect(() => {
+    if (!meUserId) return;
+    connectSocket(meUserId);
+
+    const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
+    const unsub = subscribePostApproved((payload) => {
+      const message = payload.message?.trim() || POST_APPROVED_MESSAGE;
+      setNotifications((prev) =>
+        [message, ...prev.filter((item) => item !== message && item !== POST_REVIEW_MESSAGE)].slice(0, 5),
+      );
+      setPostToast({ variant: "approved", message });
+      setPostStatusMessage((prev) => (prev === POST_REVIEW_MESSAGE ? "" : prev));
+
+      if (payload.post?.id) {
+        const mapped = mapPostForUi(
+          {
+            id: payload.post.id,
+            authorId: payload.post.authorId,
+            authorName: payload.post.authorName,
+            createdAt: payload.post.createdAt,
+            title: payload.post.title,
+            content: payload.post.content,
+            category: payload.post.category,
+            priority: normalizePriority(payload.post.priority),
+            authorAvatarDataUrl: payload.post.authorAvatarDataUrl,
+          },
+          fallbackAvatar,
+        );
+        setPosts((prev) => {
+          if (prev.some((item) => item.id === mapped.id)) return prev;
+          return [mapped, ...prev];
+        });
+      } else {
+        void loadFeedPosts();
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [meUserId, profilePhotoDataUrl, loadFeedPosts]);
+
+  useEffect(() => {
+    if (!postToast) return;
+    const timeoutId = window.setTimeout(() => setPostToast(null), 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [postToast]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -407,38 +470,32 @@ function ClientHomePageContent() {
       setPostStatusMessage("Please complete category, title, and description.");
       return;
     }
-    const created = createCommunityPost({
-      authorId: meUserId,
-      authorName: profileNameInput.trim() || displayName || "Client User",
-      authorEmail: displayEmail,
-      authorAccountType: "client",
-      authorAvatarDataUrl: profilePhotoDataUrl || undefined,
-      category,
-      title,
-      content,
-      priority: postPriorityInput,
-    });
-    setPosts((prev) =>
-      [
-        {
-          id: created.id,
-          authorId: created.authorId,
-          author: created.authorName,
-          timeAgo: "Just now",
-          title: created.title,
-          content: created.content,
-          category: created.category,
-          priority: created.priority,
-          avatar: created.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client",
-        },
-        ...prev,
-      ].filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index),
-    );
-    setPostCategoryInput("");
-    setPostPriorityInput("Normal");
-    setPostTitleInput("");
-    setPostDescriptionInput("");
-    setPostStatusMessage("Post published.");
+    if (postSubmitting) return;
+    void (async () => {
+      setPostSubmitting(true);
+      setPostStatusMessage("");
+      try {
+        await apiPostJson<{ message: string }>("/api/tasks", {
+          title,
+          description: content,
+          subjectCategory: category,
+          urgency: postPriorityInput.toLowerCase(),
+        });
+        setPostCategoryInput("");
+        setPostPriorityInput("Normal");
+        setPostTitleInput("");
+        setPostDescriptionInput("");
+        setPostToast({ variant: "pending", message: POST_REVIEW_MESSAGE });
+        setNotifications((prev) =>
+          [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
+        );
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Could not save your post. Please try again.";
+        setPostStatusMessage(message);
+      } finally {
+        setPostSubmitting(false);
+      }
+    })();
   };
 
   const navItems = [
@@ -567,13 +624,14 @@ function ClientHomePageContent() {
                             <select
                               id="post-urgency"
                               value={postPriorityInput}
-                              onChange={(event) =>
-                                setPostPriorityInput(event.target.value === "Important" ? "Important" : "Normal")
-                              }
+                              onChange={(event) => setPostPriorityInput(event.target.value as CommunityPostPriority)}
                               className="h-11 w-full appearance-none rounded-xl border border-zinc-300 bg-white px-3 pr-9 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                             >
-                              <option value="Normal">Normal</option>
-                              <option value="Important">Important</option>
+                              {URGENCY_OPTIONS.map((level) => (
+                                <option key={level} value={level}>
+                                  {level}
+                                </option>
+                              ))}
                             </select>
                             <ChevronDown
                               aria-hidden="true"
@@ -627,10 +685,11 @@ function ClientHomePageContent() {
                       <div className="flex items-center gap-2 pt-2">
                         <button
                           type="submit"
-                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF6B35] px-4 text-sm font-semibold text-white transition hover:brightness-95"
+                          disabled={postSubmitting}
+                          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF6B35] px-4 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <Send className="h-4 w-4" strokeWidth={2} />
-                          <span>Post Request</span>
+                          <span>{postSubmitting ? "Submitting…" : "Post Request"}</span>
                         </button>
                         <button
                           type="button"
@@ -640,14 +699,15 @@ function ClientHomePageContent() {
                             setPostTitleInput("");
                             setPostDescriptionInput("");
                             setPostStatusMessage("");
+                            setPostToast(null);
                           }}
                           className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm text-zinc-700 transition hover:bg-zinc-50"
                         >
                           Clear
                         </button>
                       </div>
-                      {postStatusMessage ? (
-                        <p className={`text-xs ${postStatusMessage === "Post published." ? "text-[#FF6B35]" : "text-red-600"}`}>
+                      {postStatusMessage && postStatusMessage !== POST_REVIEW_MESSAGE ? (
+                        <p className="text-xs text-red-600" role="alert">
                           {postStatusMessage}
                         </p>
                       ) : null}
@@ -991,11 +1051,7 @@ function ClientHomePageContent() {
                             {post.category}
                           </span>
                           <span
-                            className={`rounded-full px-4 py-1 text-xs font-semibold ${
-                              post.priority === "Important"
-                                ? "bg-[#FFC31E] text-zinc-900"
-                                : "bg-[#56BA54] text-zinc-900"
-                            }`}
+                            className={`rounded-full px-4 py-1 text-xs font-semibold ${urgencyBadgeClass(post.priority)}`}
                           >
                             {post.priority}
                           </span>
@@ -1027,16 +1083,27 @@ function ClientHomePageContent() {
                 </span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => router.push("/client-home?panel=notifications")}
-                className="mt-3 w-full rounded-xl border border-zinc-200 bg-white px-4 py-4 text-left text-xs text-zinc-700 shadow-sm hover:bg-zinc-50"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Bell aria-hidden="true" className="h-4 w-4 text-zinc-600" strokeWidth={1.6} />
-                  <span>{notifications[0]}</span>
-                </span>
-              </button>
+              <div className="mt-3 space-y-2">
+                {notifications.map((notice) => (
+                  <button
+                    key={notice}
+                    type="button"
+                    onClick={() => router.push("/client-home?panel=notifications")}
+                    className={`w-full rounded-xl border px-4 py-4 text-left text-xs shadow-sm hover:brightness-[0.98] ${
+                      notice.includes("approved")
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : notice.includes("review")
+                          ? "border-[#FFD4C2] bg-[#FFF2EB] text-[#9A3412]"
+                          : "border-zinc-200 bg-white text-zinc-700"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Bell aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.6} />
+                      <span>{notice}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </section>
 
@@ -1065,6 +1132,7 @@ function ClientHomePageContent() {
           </section>
         </aside>
       </div>
+      <ClientPostToast toast={postToast} onDismiss={() => setPostToast(null)} />
     </div>
   );
 }

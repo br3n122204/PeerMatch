@@ -1,4 +1,4 @@
-export type CommunityPostPriority = "Normal" | "Important";
+export type CommunityPostPriority = "Low" | "Normal" | "High";
 
 export type CommunityPost = {
   id: string;
@@ -28,6 +28,13 @@ function safeWindow(): Window | null {
   return window;
 }
 
+function normalizeStoredPriority(value: unknown): CommunityPostPriority {
+  const raw = String(value || "Normal").trim().toLowerCase();
+  if (raw === "high" || raw === "important") return "High";
+  if (raw === "low") return "Low";
+  return "Normal";
+}
+
 function parsePosts(raw: string | null): CommunityPost[] {
   if (!raw) return [];
   try {
@@ -45,7 +52,7 @@ function parsePosts(raw: string | null): CommunityPost[] {
         title: String(item.title || "").trim(),
         content: String(item.content || "").trim(),
         category: String(item.category || "").trim(),
-        priority: (item.priority === "Important" ? "Important" : "Normal") as CommunityPostPriority,
+        priority: normalizeStoredPriority(item.priority),
         createdAt: String(item.createdAt || ""),
       }))
       .filter((item) => item.id && item.authorId && item.title && item.content);
@@ -67,6 +74,7 @@ export function getCommunityPosts(): CommunityPost[] {
   return posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+/** @deprecated Prefer POST /api/tasks — kept for legacy local drafts */
 export function createCommunityPost(
   input: Omit<CommunityPost, "id" | "createdAt"> & { createdAt?: string; id?: string },
 ): CommunityPost {
@@ -81,7 +89,7 @@ export function createCommunityPost(
     title: String(input.title || "").trim().slice(0, 120),
     content: String(input.content || "").trim().slice(0, 1200),
     category: String(input.category || "").trim().slice(0, 80),
-    priority: input.priority === "Important" ? "Important" : "Normal",
+    priority: normalizeStoredPriority(input.priority),
   };
 
   const nextPosts = [post, ...getCommunityPosts()];

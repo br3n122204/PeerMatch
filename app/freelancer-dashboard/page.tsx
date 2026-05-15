@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Clock, Users } from "lucide-react";
 import { DashboardStatCard } from "@/app/components/freelancer/DashboardStatCard";
 import { useFreelancerDashboardUser } from "./FreelancerDashboardShell";
-import { getCommunityPosts } from "@/app/lib/postsStorage";
+import { fetchApprovedCommunityPosts, urgencyBadgeClass } from "@/app/lib/communityPosts";
+import type { CommunityPost } from "@/app/lib/postsStorage";
 import {
   resolveFreelancerGreetingDisplayName,
   resolveFreelancerGreetingMode,
@@ -14,7 +15,7 @@ import {
 export default function FreelancerDashboardPage() {
   const router = useRouter();
   const { user } = useFreelancerDashboardUser();
-  const [posts, setPosts] = useState(() => getCommunityPosts());
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
 
   const greetingName = useMemo(
     () => (user ? resolveFreelancerGreetingDisplayName(user) : ""),
@@ -28,14 +29,18 @@ export default function FreelancerDashboardPage() {
   }, [user]);
 
   useEffect(() => {
-    const loadPosts = () => setPosts(getCommunityPosts());
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
+    let cancelled = false;
+    (async () => {
+      try {
+        const feed = await fetchApprovedCommunityPosts();
+        if (!cancelled) setPosts(feed);
+      } catch {
+        if (!cancelled) setPosts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const formatTimeAgo = (value: string) => {
@@ -106,11 +111,7 @@ export default function FreelancerDashboardPage() {
                   <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
                     {post.category || "General"}
                   </span>
-                  <span
-                    className={`rounded-full px-4 py-1 text-xs font-semibold ${
-                      post.priority === "Important" ? "bg-[#FFC31E] text-zinc-900" : "bg-[#56BA54] text-zinc-900"
-                    }`}
-                  >
+                  <span className={`rounded-full px-4 py-1 text-xs font-semibold ${urgencyBadgeClass(post.priority)}`}>
                     {post.priority}
                   </span>
                 </div>
