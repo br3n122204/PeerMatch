@@ -229,3 +229,32 @@ export function subscribePresenceSnapshot(handler: (payload: PresenceSnapshotPay
     s.off("presence_snapshot", handler);
   };
 }
+
+export type PostApprovedPayload = {
+  message?: string;
+  post?: {
+    id: string;
+    authorId: string;
+    authorName: string;
+    authorEmail?: string;
+    authorAccountType?: string;
+    authorAvatarDataUrl?: string;
+    title: string;
+    content: string;
+    category: string;
+    priority: string;
+    createdAt: string;
+    budget?: number;
+  };
+};
+
+export function subscribePostApproved(handler: (payload: PostApprovedPayload) => void): () => void {
+  const s = socket;
+  if (!s) {
+    return () => {};
+  }
+  s.on("post_approved", handler);
+  return () => {
+    s.off("post_approved", handler);
+  };
+}

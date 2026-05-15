@@ -4,6 +4,8 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const { authMiddleware, requireAdmin } = require('../middleware/auth');
 const authController = require('../controllers/authController');
+const { mapTaskToFeedPost } = require('../utils/taskFeedDto');
+const { emitToUser } = require('../socket/socketServer');
 
 const router = express.Router();
 
@@ -197,6 +199,9 @@ router.get('/tasks', async (req, res) => {
     const payload = tasks.map((t) => ({
       id: String(t._id),
       title: t.title,
+      description: t.description || '',
+      subjectCategory: t.subjectCategory || '',
+      urgency: t.urgency || 'normal',
       createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : null,
       updatedAt: t.updatedAt ? new Date(t.updatedAt).toISOString() : null,
       flagged: !!t.flagged,
@@ -223,11 +228,20 @@ router.patch('/tasks/:id', async (req, res) => {
       return res.status(400).json({ message: 'Invalid task id.' });
     }
     const task = await Task.findByIdAndUpdate(req.params.id, { $set: { status } }, { new: true })
-      .populate('clientId', 'name email')
+      .populate('clientId', 'name email accountType photoDataUrl')
       .lean();
     if (!task) {
       return res.status(404).json({ message: 'Task not found.' });
     }
+
+    if (status === 'approved' && task.clientId) {
+      const clientId = task.clientId._id ? String(task.clientId._id) : String(task.clientId);
+      emitToUser(clientId, 'post_approved', {
+        message: 'Your post has been approved.',
+        post: mapTaskToFeedPost(task),
+      });
+    }
+
     res.json({
       task: {
         id: String(task._id),

@@ -43,11 +43,13 @@ export default function FreelancerDashboardPage() {
           title="Active Connections"
           description="Students you're helping or getting help from"
           icon={<Users className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=connections")}
         />
         <DashboardStatCard
           title="Hours This Week"
           description="Time spent in peer collaboration"
           icon={<Clock className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=hours")}
         />
       </div>
 
