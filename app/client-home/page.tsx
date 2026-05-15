@@ -1049,14 +1049,16 @@ function ClientHomePageContent() {
               </p>
             ) : (
               recentPosts.map((post) => (
-                <div
+                <button
                   key={post.id}
-                  className="rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 shadow-sm"
+                  type="button"
+                  onClick={() => router.push(`/client-home?post=${encodeURIComponent(post.id)}`)}
+                  className="w-full rounded-xl border border-[#E8DDD6] bg-[#F4EBE4] px-4 py-3 text-left shadow-sm hover:bg-[#efe4dd]"
                 >
                   <p className="text-sm font-semibold text-zinc-900">{post.author}</p>
                   <p className="mt-2 line-clamp-2 text-xs leading-snug text-zinc-700">{post.title}</p>
                   <p className="mt-3 text-xs text-zinc-500">{post.timeAgo}</p>
-                </div>
+                </button>
               ))
             )}
             </div>

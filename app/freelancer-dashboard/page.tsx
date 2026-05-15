@@ -66,11 +66,13 @@ export default function FreelancerDashboardPage() {
           title="Active Connections"
           description="Students you're helping or getting help from"
           icon={<Users className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=connections")}
         />
         <DashboardStatCard
           title="Hours This Week"
           description="Time spent in peer collaboration"
           icon={<Clock className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=hours")}
         />
       </div>
 
@@ -82,23 +84,24 @@ export default function FreelancerDashboardPage() {
         </h2>
         <div className="mt-5 space-y-4">
           {posts.map((post) => (
-            <article key={post.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-5 lg:p-7">
+            <button
+              key={post.id}
+              type="button"
+              onClick={() => router.push(`/freelancer-dashboard/client/${encodeURIComponent(post.authorId)}`)}
+              className="block w-full rounded-2xl border border-zinc-100 bg-zinc-50 p-5 text-left hover:bg-zinc-100 lg:p-7"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/freelancer-dashboard/client/${encodeURIComponent(post.authorId)}`)}
-                  className="flex items-center gap-3 text-left"
-                >
+                <div className="flex items-center gap-3">
                   <img
                     src={post.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client"}
                     alt={`${post.authorName} avatar`}
                     className="h-10 w-10 rounded-full border border-zinc-300"
                   />
                   <div>
-                    <p className="text-lg font-semibold text-zinc-900 hover:text-[#FF6B35]">{post.authorName || "Client User"}</p>
+                    <p className="text-2xl font-semibold text-zinc-900">{post.authorName || "Client User"}</p>
                     <p className="text-xs text-zinc-500">{formatTimeAgo(post.createdAt)}</p>
                   </div>
-                </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
                     {post.category || "General"}
@@ -112,9 +115,9 @@ export default function FreelancerDashboardPage() {
                   </span>
                 </div>
               </div>
-              <p className="mt-4 text-xl font-semibold leading-tight text-zinc-900">{post.title}</p>
-              <p className="mt-3 text-base leading-[1.6] text-zinc-700">{post.content}</p>
-            </article>
+              <p className="mt-4 text-2xl font-semibold leading-tight text-zinc-900">{post.title}</p>
+              <p className="mt-5 text-base leading-[1.6] text-zinc-700">{post.content}</p>
+            </button>
           ))}
           {posts.length === 0 ? <p className="text-sm text-zinc-500">No posts yet.</p> : null}
         </div>
