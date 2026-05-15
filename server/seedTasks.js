@@ -34,6 +34,8 @@ async function run() {
     {
       title: 'Research paper literature review',
       description: 'CS elective — need APA sources.',
+      subjectCategory: 'Computer Science',
+      urgency: 'high',
       clientId: client._id,
       budget: 2500,
       category: 'academic',
@@ -42,6 +44,9 @@ async function run() {
     },
     {
       title: 'Event poster design',
+      description: 'Campus org event poster.',
+      subjectCategory: 'Design',
+      urgency: 'normal',
       clientId: client._id,
       budget: 800,
       category: 'non-academic',
@@ -50,6 +55,9 @@ async function run() {
     },
     {
       title: 'Data structures tutoring session',
+      description: 'Weekly tutoring for midterms.',
+      subjectCategory: 'Computer Science',
+      urgency: 'low',
       clientId: client._id,
       budget: 1200,
       category: 'academic',
