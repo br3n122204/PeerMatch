@@ -43,10 +43,10 @@ import {
 } from "../lib/communityPosts";
 import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
 import {
-  createCommunityPost,
-  getCommunityPosts,
+  clearCommunityPostsStorage,
+  COMMUNITY_POSTS_CHANGED_EVENT,
   isCommunityPostWithinLast24Hours,
-  subscribeToCommunityPosts,
+  notifyCommunityPostsChanged,
   type CommunityPostPriority,
 } from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
@@ -274,20 +274,18 @@ function ClientHomePageContent() {
     try {
       const feed = await fetchApprovedCommunityPosts();
       setPosts(feed.map((post) => mapPostForUi(post, fallbackAvatar)));
+      clearCommunityPostsStorage();
     } catch {
       setPosts([]);
     }
   }, [profilePhotoDataUrl]);
 
   useEffect(() => {
-    const loadPosts = () => {
-      const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
-      const nextPosts = getCommunityPosts().map((post) => mapPostForUi(post, fallbackAvatar));
-      setPosts(nextPosts);
-    };
-    loadPosts();
-    return subscribeToCommunityPosts(loadPosts);
-  }, [profilePhotoDataUrl]);
+    void loadFeedPosts();
+    const onRefresh = () => void loadFeedPosts();
+    window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+    return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+  }, [loadFeedPosts]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -509,6 +507,8 @@ function ClientHomePageContent() {
         setNotifications((prev) =>
           [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
         );
+        notifyCommunityPostsChanged();
+        await loadFeedPosts();
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Could not save your post. Please try again.";
         setPostStatusMessage(message);

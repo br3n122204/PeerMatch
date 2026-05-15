@@ -4,7 +4,11 @@ import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { fetchApprovedCommunityPosts } from "@/app/lib/communityPosts";
-import { isCommunityPostWithinLast24Hours, type CommunityPost } from "@/app/lib/postsStorage";
+import {
+  clearCommunityPostsStorage,
+  isCommunityPostWithinLast24Hours,
+  type CommunityPost,
+} from "@/app/lib/postsStorage";
 
 function formatTimeAgo(value: string) {
   const ts = new Date(value).getTime();
@@ -28,7 +32,10 @@ export function FreelancerRightAside() {
     (async () => {
       try {
         const feed = await fetchApprovedCommunityPosts();
-        if (!cancelled) setPosts(feed);
+        if (!cancelled) {
+          setPosts(feed);
+          clearCommunityPostsStorage();
+        }
       } catch {
         if (!cancelled) setPosts([]);
       }

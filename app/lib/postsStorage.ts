@@ -66,10 +66,21 @@ function parsePosts(raw: string | null): CommunityPost[] {
   }
 }
 
-function notifyPostsChanged(): void {
+export function notifyCommunityPostsChanged(): void {
   const w = safeWindow();
   if (!w) return;
   w.dispatchEvent(new CustomEvent(COMMUNITY_POSTS_CHANGED_EVENT));
+}
+
+/** Removes legacy browser-only posts so feeds match MongoDB after API sync. */
+export function clearCommunityPostsStorage(): void {
+  const w = safeWindow();
+  if (!w) return;
+  w.localStorage.removeItem(POSTS_KEY);
+}
+
+function notifyPostsChanged(): void {
+  notifyCommunityPostsChanged();
 }
 
 function writePosts(posts: CommunityPost[]): void {

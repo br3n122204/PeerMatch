@@ -29,9 +29,8 @@ export function urgencyBadgeClass(priority: CommunityPostPriority): string {
   return "bg-[#56BA54] text-zinc-900";
 }
 
-export async function fetchApprovedCommunityPosts(): Promise<CommunityPost[]> {
-  const data = await apiGetJson<FeedResponse>("/api/tasks");
-  return (data.posts || []).map((post) => ({
+function mapFeedPosts(posts: ApiFeedPost[] | undefined): CommunityPost[] {
+  return (posts || []).map((post) => ({
     id: post.id,
     authorId: post.authorId,
     authorName: post.authorName,
@@ -45,6 +44,16 @@ export async function fetchApprovedCommunityPosts(): Promise<CommunityPost[]> {
     budget: typeof post.budget === "number" ? post.budget : 0,
     createdAt: post.createdAt,
   }));
+}
+
+export async function fetchApprovedCommunityPosts(): Promise<CommunityPost[]> {
+  const data = await apiGetJson<FeedResponse>("/api/tasks");
+  return mapFeedPosts(data.posts);
+}
+
+export async function fetchMyCommunityPosts(): Promise<CommunityPost[]> {
+  const data = await apiGetJson<FeedResponse>("/api/tasks/mine");
+  return mapFeedPosts(data.posts);
 }
 
 export async function suggestTaskBudget(input: {

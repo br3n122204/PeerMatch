@@ -1,26 +1,42 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getCommunityPosts, type CommunityPost } from "./postsStorage";
+import { fetchApprovedCommunityPosts } from "./communityPosts";
+import {
+  clearCommunityPostsStorage,
+  COMMUNITY_POSTS_CHANGED_EVENT,
+  type CommunityPost,
+} from "./postsStorage";
 
-const POSTS_STORAGE_KEY = "peermatch_community_posts_v1";
+type UseCommunityPostsResult = {
+  posts: CommunityPost[];
+  loading: boolean;
+  reload: () => Promise<void>;
+};
 
-export function useCommunityPosts(): CommunityPost[] {
-  const [posts, setPosts] = useState<CommunityPost[]>(() => getCommunityPosts());
+export function useCommunityPosts(): UseCommunityPostsResult {
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const loadPosts = useCallback(() => {
-    setPosts(getCommunityPosts());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const feed = await fetchApprovedCommunityPosts();
+      setPosts(feed);
+      clearCommunityPostsStorage();
+    } catch {
+      setPosts([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== POSTS_STORAGE_KEY) return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [loadPosts]);
+    void reload();
+    const onRefresh = () => void reload();
+    window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+    return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+  }, [reload]);
 
-  return posts;
+  return { posts, loading, reload };
 }
