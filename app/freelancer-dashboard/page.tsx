@@ -1,19 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { Clock, Users } from "lucide-react";
 import { DashboardStatCard } from "@/app/components/freelancer/DashboardStatCard";
-import { useFreelancerDashboardUser } from "./FreelancerDashboardShell";
+import { CommunityPostCard } from "@/app/components/freelancer/CommunityPostCard";
+import { OfferHelpPanel } from "@/app/components/freelancer/OfferHelpPanel";
 import { useCommunityPosts } from "@/app/lib/useCommunityPosts";
 import {
   resolveFreelancerGreetingDisplayName,
   resolveFreelancerGreetingMode,
 } from "@/app/lib/freelancerStorage";
+import { useFreelancerDashboardUser, useFreelancerSelectedPost } from "./FreelancerDashboardShell";
 
 export default function FreelancerDashboardPage() {
-  const router = useRouter();
   const { user } = useFreelancerDashboardUser();
+  const { selectedPost, setSelectedPost, clearSelectedPost } = useFreelancerSelectedPost();
   const posts = useCommunityPosts();
 
   const greetingName = useMemo(
@@ -55,58 +56,39 @@ export default function FreelancerDashboardPage() {
           title="Active Connections"
           description="Students you're helping or getting help from"
           icon={<Users className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=connections")}
         />
         <DashboardStatCard
           title="Hours This Week"
           description="Time spent in peer collaboration"
           icon={<Clock className="h-6 w-6" strokeWidth={1.75} />}
+          onClick={() => router.push("/freelancer-dashboard?panel=hours")}
         />
       </div>
 
       <hr className="my-10 border-zinc-200" />
 
       <section aria-labelledby="latest-posts-heading">
-        <h2 id="latest-posts-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
-          Latest Post By CIT Community
-        </h2>
-        <div className="mt-5 space-y-4">
-          {posts.map((post) => (
-            <article key={post.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-5 lg:p-7">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/freelancer-dashboard/client/${encodeURIComponent(post.authorId)}`)}
-                  className="flex items-center gap-3 text-left"
-                >
-                  <img
-                    src={post.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client"}
-                    alt={`${post.authorName} avatar`}
-                    className="h-10 w-10 rounded-full border border-zinc-300"
-                  />
-                  <div>
-                    <p className="text-lg font-semibold text-zinc-900 hover:text-[#FF6B35]">{post.authorName || "Client User"}</p>
-                    <p className="text-xs text-zinc-500">{formatTimeAgo(post.createdAt)}</p>
-                  </div>
-                </button>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
-                    {post.category || "General"}
-                  </span>
-                  <span
-                    className={`rounded-full px-4 py-1 text-xs font-semibold ${
-                      post.priority === "Important" ? "bg-[#FFC31E] text-zinc-900" : "bg-[#56BA54] text-zinc-900"
-                    }`}
-                  >
-                    {post.priority}
-                  </span>
-                </div>
-              </div>
-              <p className="mt-4 text-xl font-semibold leading-tight text-zinc-900">{post.title}</p>
-              <p className="mt-3 text-base leading-[1.6] text-zinc-700">{post.content}</p>
-            </article>
-          ))}
-          {posts.length === 0 ? <p className="text-sm text-zinc-500">No posts yet.</p> : null}
-        </div>
+        {selectedPost && user ? (
+          <OfferHelpPanel
+            post={selectedPost}
+            freelancerId={user.id}
+            freelancerName={user.name}
+            onBack={clearSelectedPost}
+          />
+        ) : (
+          <>
+            <h2 id="latest-posts-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+              Latest Post By CIT Community
+            </h2>
+            <div className="mt-5 space-y-4">
+              {posts.map((post) => (
+                <CommunityPostCard key={post.id} post={post} onSelect={setSelectedPost} />
+              ))}
+              {posts.length === 0 ? <p className="text-sm text-zinc-500">No posts yet.</p> : null}
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
