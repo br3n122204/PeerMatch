@@ -1,23 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCommunityPosts } from "@/app/lib/postsStorage";
+import { useCommunityPosts } from "@/app/lib/useCommunityPosts";
 
 export default function FreelancerBrowsePage() {
   const router = useRouter();
-  const [posts, setPosts] = useState(() => getCommunityPosts());
-
-  useEffect(() => {
-    const loadPosts = () => setPosts(getCommunityPosts());
-    loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  const posts = useCommunityPosts();
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();

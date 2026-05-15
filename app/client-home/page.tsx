@@ -31,7 +31,13 @@ import {
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
-import { createCommunityPost, getCommunityPosts, type CommunityPostPriority } from "../lib/postsStorage";
+import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
+import {
+  createCommunityPost,
+  getCommunityPosts,
+  subscribeToCommunityPosts,
+  type CommunityPostPriority,
+} from "../lib/postsStorage";
 import { disconnectSocket } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
 
@@ -241,12 +247,7 @@ function ClientHomePageContent() {
       setPosts(nextPosts);
     };
     loadPosts();
-    const onStorage = (event: StorageEvent) => {
-      if (event.key && event.key !== "peermatch_community_posts_v1") return;
-      loadPosts();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return subscribeToCommunityPosts(loadPosts);
   }, [profilePhotoDataUrl]);
 
   useEffect(() => {
@@ -312,7 +313,10 @@ function ClientHomePageContent() {
     }
   };
 
-  const featuredWork: Array<{ title: string; category: string; rating: number; reviews: number }> = [];
+  const myFeaturedPosts = useMemo(
+    () => (meUserId ? posts.filter((post) => post.authorId === meUserId) : []),
+    [posts, meUserId],
+  );
   const skillsAndExpertise: string[] = profileSkillsInput
     .split(",")
     .map((item) => item.trim())
@@ -508,7 +512,7 @@ function ClientHomePageContent() {
 
         <main
           className={`flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white shadow-[0_4px_32px_rgba(15,23,42,0.04)] ${
-            activePanel === "profile" || activePanel === "messages"
+            activePanel === "profile" || activePanel === "featured-post" || activePanel === "messages"
               ? "p-4"
               : "p-6 sm:p-8 lg:p-10"
           } ${activePanel === "messages" ? "overflow-hidden" : ""}`}
@@ -681,8 +685,11 @@ function ClientHomePageContent() {
                   />
                 </div>
               </section>
-            ) : activePanel === "profile" ? (
-              <section aria-labelledby="profile-heading" className="flex min-h-0 flex-1 flex-col">
+            ) : activePanel === "profile" || activePanel === "featured-post" ? (
+              <section
+                aria-labelledby={activePanel === "featured-post" ? "featured-post-heading" : "profile-heading"}
+                className="flex min-h-0 flex-1 flex-col"
+              >
                 <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
                   <article className="sticky top-4 z-10 h-fit w-full max-w-[320px] rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm xl:max-w-none">
                     <div className="mx-auto h-24 w-24 overflow-hidden rounded-full border border-zinc-200 bg-[#E8EFEC]">
@@ -756,6 +763,10 @@ function ClientHomePageContent() {
                   </article>
 
                   <div className="profile-scroll-pane max-h-[calc(100vh-3.5rem)] min-h-0 min-w-0 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] scroll-smooth">
+                    {activePanel === "featured-post" ? (
+                      <FeaturedPostEditor authorId={meUserId} authorAvatar={profilePhotoDataUrl || undefined} />
+                    ) : (
+                      <>
                     <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
                         <UserCircle className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
@@ -828,25 +839,41 @@ function ClientHomePageContent() {
                       />
                     </article>
 
-                    <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
+                    <Link
+                      href="/client-home?panel=featured-post"
+                      className="block rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm transition hover:border-[#FF6B35]/40 hover:bg-[#FFF9F6]"
+                    >
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
                         <FileText className="h-5 w-5 shrink-0 text-[#FF6B35]" strokeWidth={1.75} aria-hidden />
                         Featured Post
                       </h2>
-                      {featuredWork.length > 0 ? (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          {featuredWork.map((work) => (
-                            <div key={work.title} className="rounded-xl border border-zinc-200 bg-white p-3">
-                              <div className="h-20 rounded-lg bg-[#E8EFEC]" />
-                              <p className="mt-2 text-sm font-semibold text-zinc-900">{work.title}</p>
-                              <p className="text-xs text-zinc-500">{work.category}</p>
+                      {myFeaturedPosts.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {myFeaturedPosts.slice(0, 3).map((post) => (
+                            <div key={post.id} className="rounded-xl border border-zinc-200 bg-white p-3">
+                              <p className="truncate text-sm font-semibold text-zinc-900">{post.title}</p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <p className="text-xs text-zinc-500">{post.category}</p>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    post.priority === "Important"
+                                      ? "bg-[#FFC31E] text-zinc-900"
+                                      : "bg-[#56BA54] text-zinc-900"
+                                  }`}
+                                >
+                                  {post.priority}
+                                </span>
+                              </div>
                             </div>
                           ))}
+                          <p className="text-xs font-medium text-[#FF6B35]">Manage featured posts →</p>
                         </div>
                       ) : (
-                        <div className="mt-3 min-h-20 rounded-xl border border-dashed border-zinc-300 bg-white" />
+                        <div className="mt-3 flex min-h-20 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white px-4 text-center text-sm text-zinc-500">
+                          Add or manage your posts
+                        </div>
                       )}
-                    </article>
+                    </Link>
 
                     <article className="rounded-2xl border border-zinc-200 bg-[#F3F6F5] p-4 shadow-sm">
                       <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900">
@@ -913,6 +940,8 @@ function ClientHomePageContent() {
                         {profileSaving ? "Saving..." : "Save Updates"}
                       </button>
                     </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </section>

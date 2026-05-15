@@ -14,7 +14,10 @@ export type CommunityPost = {
   createdAt: string;
 };
 
-const POSTS_KEY = "peermatch_community_posts_v1";
+export const COMMUNITY_POSTS_STORAGE_KEY = "peermatch_community_posts_v1";
+export const COMMUNITY_POSTS_CHANGED_EVENT = "peermatch:posts-changed";
+
+const POSTS_KEY = COMMUNITY_POSTS_STORAGE_KEY;
 
 function safeWindow(): Window | null {
   if (typeof window === "undefined") return null;
@@ -47,10 +50,33 @@ function parsePosts(raw: string | null): CommunityPost[] {
   }
 }
 
+function notifyPostsChanged(): void {
+  const w = safeWindow();
+  if (!w) return;
+  w.dispatchEvent(new CustomEvent(COMMUNITY_POSTS_CHANGED_EVENT));
+}
+
 function writePosts(posts: CommunityPost[]): void {
   const w = safeWindow();
   if (!w) return;
   w.localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+  notifyPostsChanged();
+}
+
+export function subscribeToCommunityPosts(onChange: () => void): () => void {
+  const w = safeWindow();
+  if (!w) return () => {};
+  const onCustom = () => onChange();
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== POSTS_KEY) return;
+    onChange();
+  };
+  w.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onCustom);
+  w.addEventListener("storage", onStorage);
+  return () => {
+    w.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onCustom);
+    w.removeEventListener("storage", onStorage);
+  };
 }
 
 export function getCommunityPosts(): CommunityPost[] {
@@ -80,4 +106,41 @@ export function createCommunityPost(
   const nextPosts = [post, ...getCommunityPosts()];
   writePosts(nextPosts);
   return post;
+}
+
+export function getCommunityPostsByAuthor(authorId: string): CommunityPost[] {
+  const id = String(authorId || "").trim();
+  if (!id) return [];
+  return getCommunityPosts().filter((post) => post.authorId === id);
+}
+
+export function updateCommunityPost(
+  postId: string,
+  authorId: string,
+  patch: Partial<Pick<CommunityPost, "title" | "content" | "category" | "priority">>,
+): CommunityPost | null {
+  const posts = getCommunityPosts();
+  const index = posts.findIndex((post) => post.id === postId && post.authorId === authorId);
+  if (index === -1) return null;
+
+  const current = posts[index];
+  const updated: CommunityPost = {
+    ...current,
+    title: patch.title !== undefined ? String(patch.title).trim().slice(0, 120) : current.title,
+    content: patch.content !== undefined ? String(patch.content).trim().slice(0, 1200) : current.content,
+    category: patch.category !== undefined ? String(patch.category).trim().slice(0, 80) : current.category,
+    priority:
+      patch.priority !== undefined
+        ? patch.priority === "Important"
+          ? "Important"
+          : "Normal"
+        : current.priority,
+  };
+
+  if (!updated.title || !updated.content) return null;
+
+  const nextPosts = [...posts];
+  nextPosts[index] = updated;
+  writePosts(nextPosts);
+  return updated;
 }
