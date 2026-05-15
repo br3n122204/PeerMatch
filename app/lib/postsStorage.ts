@@ -19,6 +19,13 @@ export const COMMUNITY_POSTS_STORAGE_KEY = "peermatch_community_posts_v1";
 export const COMMUNITY_POSTS_CHANGED_EVENT = "peermatch:posts-changed";
 
 const POSTS_KEY = COMMUNITY_POSTS_STORAGE_KEY;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+export function isCommunityPostWithinLast24Hours(createdAt: string): boolean {
+  const ts = new Date(createdAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() - ts < TWENTY_FOUR_HOURS_MS;
+}
 
 function safeWindow(): Window | null {
   if (typeof window === "undefined") return null;

@@ -33,10 +33,20 @@ import {
   Users,
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
+import {
+  fetchApprovedCommunityPosts,
+  formatPhpBudget,
+  POST_REVIEW_MESSAGE,
+  suggestTaskBudget,
+  urgencyBadgeClass,
+  URGENCY_OPTIONS,
+  type BudgetSuggestion,
+} from "../lib/communityPosts";
 import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
 import {
   createCommunityPost,
   getCommunityPosts,
+  isCommunityPostWithinLast24Hours,
   subscribeToCommunityPosts,
   type CommunityPostPriority,
 } from "../lib/postsStorage";
@@ -984,11 +994,7 @@ function ClientHomePageContent() {
                               <div className="mt-1 flex flex-wrap items-center gap-2">
                                 <p className="text-xs text-zinc-500">{post.category}</p>
                                 <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                    post.priority === "Important"
-                                      ? "bg-[#FFC31E] text-zinc-900"
-                                      : "bg-[#56BA54] text-zinc-900"
-                                  }`}
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${urgencyBadgeClass(post.priority)}`}
                                 >
                                   {post.priority}
                                 </span>
