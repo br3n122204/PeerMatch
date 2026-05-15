@@ -34,7 +34,9 @@ import {
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 import {
   fetchApprovedCommunityPosts,
+  fetchMyCommunityPosts,
   formatPhpBudget,
+  POST_APPROVED_MESSAGE,
   POST_REVIEW_MESSAGE,
   suggestTaskBudget,
   urgencyBadgeClass,
@@ -49,7 +51,7 @@ import {
   notifyCommunityPostsChanged,
   type CommunityPostPriority,
 } from "../lib/postsStorage";
-import { disconnectSocket } from "../lib/socket";
+import { connectSocket, disconnectSocket, subscribePostApproved } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
 import { ClientPostToast, type ClientPostToastState } from "../components/ClientPostToast";
 
@@ -178,6 +180,7 @@ function ClientHomePageContent() {
   const [postStatusMessage, setPostStatusMessage] = useState("");
   const [notifications, setNotifications] = useState<string[]>([]);
   const [postToast, setPostToast] = useState<ClientPostToastState>(null);
+  const knownApprovedPostIdsRef = useRef<Set<string>>(new Set());
 
   const activeConnections: number | null | undefined = undefined;
   const hoursThisWeek: number | null | undefined = undefined;
@@ -286,6 +289,89 @@ function ClientHomePageContent() {
     window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
     return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
   }, [loadFeedPosts]);
+
+  const dismissPostToast = useCallback(() => setPostToast(null), []);
+
+  const handlePostApproved = useCallback(
+    (message?: string) => {
+      const approvedMessage = String(message || "").trim() || POST_APPROVED_MESSAGE;
+      setPostToast({ variant: "approved", message: approvedMessage });
+      setNotifications((prev) =>
+        [approvedMessage, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE && item !== approvedMessage)].slice(
+          0,
+          5,
+        ),
+      );
+      notifyCommunityPostsChanged();
+      void loadFeedPosts();
+    },
+    [loadFeedPosts],
+  );
+
+  useEffect(() => {
+    if (!meUserId) return;
+    connectSocket(meUserId);
+    const unsub = subscribePostApproved((payload) => {
+      if (payload.post?.id) {
+        knownApprovedPostIdsRef.current.add(payload.post.id);
+      }
+      handlePostApproved(payload.message);
+    });
+    return unsub;
+  }, [meUserId, handlePostApproved]);
+
+  useEffect(() => {
+    if (!meUserId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mine = await fetchMyCommunityPosts();
+        if (cancelled) return;
+        for (const post of mine) {
+          if (post.status === "approved") {
+            knownApprovedPostIdsRef.current.add(post.id);
+          }
+        }
+      } catch {
+        // ignore — polling/socket will still work after a new post
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [meUserId]);
+
+  const awaitingPostApproval =
+    postToast?.variant === "pending" || notifications.includes(POST_REVIEW_MESSAGE);
+
+  useEffect(() => {
+    if (!meUserId || !awaitingPostApproval) return;
+
+    let cancelled = false;
+    const pollForApproval = async () => {
+      try {
+        const mine = await fetchMyCommunityPosts();
+        if (cancelled) return;
+        const newlyApproved = mine.filter(
+          (post) => post.status === "approved" && !knownApprovedPostIdsRef.current.has(post.id),
+        );
+        if (newlyApproved.length === 0) return;
+        for (const post of newlyApproved) {
+          knownApprovedPostIdsRef.current.add(post.id);
+        }
+        handlePostApproved();
+      } catch {
+        // retry on next interval
+      }
+    };
+
+    void pollForApproval();
+    const intervalId = window.setInterval(() => void pollForApproval(), 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [meUserId, awaitingPostApproval, handlePostApproved]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -489,13 +575,16 @@ function ClientHomePageContent() {
       setPostSubmitting(true);
       setPostStatusMessage("");
       try {
-        await apiPostJson<{ message: string }>("/api/tasks", {
+        const created = await apiPostJson<{ message: string; post?: { id: string } }>("/api/tasks", {
           title,
           description: content,
           subjectCategory: category,
           urgency: postPriorityInput.toLowerCase(),
           budget: Math.round(budget),
         });
+        if (created.post?.id) {
+          knownApprovedPostIdsRef.current.delete(created.post.id);
+        }
         setPostCategoryInput("");
         setPostPriorityInput("Normal");
         setPostTitleInput("");
@@ -1195,7 +1284,7 @@ function ClientHomePageContent() {
           </section>
         </aside>
       </div>
-      <ClientPostToast toast={postToast} onDismiss={() => setPostToast(null)} />
+      <ClientPostToast toast={postToast} onDismiss={dismissPostToast} />
     </div>
   );
 }

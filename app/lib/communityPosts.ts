@@ -43,6 +43,7 @@ function mapFeedPosts(posts: ApiFeedPost[] | undefined): CommunityPost[] {
     priority: normalizePriority(post.priority),
     budget: typeof post.budget === "number" ? post.budget : 0,
     createdAt: post.createdAt,
+    status: post.status,
   }));
 }
 

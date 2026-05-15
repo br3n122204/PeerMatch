@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { Bell, X } from "lucide-react";
+
+const TOAST_AUTO_DISMISS_MS = 5500;
 
 export type ClientPostToastState = {
   variant: "pending" | "approved";
@@ -13,6 +16,12 @@ type ClientPostToastProps = {
 };
 
 export function ClientPostToast({ toast, onDismiss }: ClientPostToastProps) {
+  useEffect(() => {
+    if (!toast) return;
+    const timeoutId = window.setTimeout(onDismiss, TOAST_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast, onDismiss]);
+
   if (!toast) return null;
 
   const isPending = toast.variant === "pending";
