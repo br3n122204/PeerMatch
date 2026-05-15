@@ -43,52 +43,49 @@ export default function FreelancerDashboardPage() {
 
   return (
     <main className="h-full rounded-2xl border border-zinc-100/80 bg-white p-6 shadow-[0_4px_32px_rgba(15,23,42,0.04)] sm:p-8 lg:p-10">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-          <span className="text-zinc-900">{leadLabel},</span>{" "}
-          <span className="text-zinc-900">{greetingName || "…"}</span>
-        </h1>
-        <p className="mt-2 text-sm text-zinc-500">Here&apos;s what&apos;s happening in your learning community</p>
-      </header>
-
-      <div className="mt-8 grid gap-5 md:grid-cols-2">
-        <DashboardStatCard
-          title="Active Connections"
-          description="Students you're helping or getting help from"
-          icon={<Users className="h-6 w-6" strokeWidth={1.75} />}
-          onClick={() => router.push("/freelancer-dashboard?panel=connections")}
-        />
-        <DashboardStatCard
-          title="Hours This Week"
-          description="Time spent in peer collaboration"
-          icon={<Clock className="h-6 w-6" strokeWidth={1.75} />}
-          onClick={() => router.push("/freelancer-dashboard?panel=hours")}
-        />
-      </div>
-
-      <hr className="my-10 border-zinc-200" />
 
       <section aria-labelledby="latest-posts-heading">
-        {selectedPost && user ? (
-          <OfferHelpPanel
-            post={selectedPost}
-            freelancerId={user.id}
-            freelancerName={user.name}
-            onBack={clearSelectedPost}
-          />
-        ) : (
-          <>
-            <h2 id="latest-posts-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
-              Latest Post By CIT Community
-            </h2>
-            <div className="mt-5 space-y-4">
-              {posts.map((post) => (
-                <CommunityPostCard key={post.id} post={post} onSelect={setSelectedPost} />
-              ))}
-              {posts.length === 0 ? <p className="text-sm text-zinc-500">No posts yet.</p> : null}
-            </div>
-          </>
-        )}
+        <h2 id="latest-posts-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+          Community Feed
+        </h2>
+        <div className="mt-5 space-y-4">
+          {posts.map((post) => (
+            <article key={post.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-5 lg:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/freelancer-dashboard/client/${encodeURIComponent(post.authorId)}`)}
+                  className="flex items-center gap-3 text-left"
+                >
+                  <img
+                    src={post.authorAvatarDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client"}
+                    alt={`${post.authorName} avatar`}
+                    className="h-10 w-10 rounded-full border border-zinc-300"
+                  />
+                  <div>
+                    <p className="text-lg font-semibold text-zinc-900 hover:text-[#FF6B35]">{post.authorName || "Client User"}</p>
+                    <p className="text-xs text-zinc-500">{formatTimeAgo(post.createdAt)}</p>
+                  </div>
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-zinc-400 px-4 py-1 text-xs text-zinc-800">
+                    {post.category || "General"}
+                  </span>
+                  <span
+                    className={`rounded-full px-4 py-1 text-xs font-semibold ${
+                      post.priority === "Important" ? "bg-[#FFC31E] text-zinc-900" : "bg-[#56BA54] text-zinc-900"
+                    }`}
+                  >
+                    {post.priority}
+                  </span>
+                </div>
+              </div>
+              <p className="mt-4 text-xl font-semibold leading-tight text-zinc-900">{post.title}</p>
+              <p className="mt-3 text-base leading-[1.6] text-zinc-700">{post.content}</p>
+            </article>
+          ))}
+          {posts.length === 0 ? <p className="text-sm text-zinc-500">No posts yet.</p> : null}
+        </div>
       </section>
     </main>
   );
