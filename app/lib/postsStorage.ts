@@ -11,6 +11,7 @@ export type CommunityPost = {
   content: string;
   category: string;
   priority: CommunityPostPriority;
+  budget: number;
   createdAt: string;
 };
 
@@ -53,6 +54,7 @@ function parsePosts(raw: string | null): CommunityPost[] {
         content: String(item.content || "").trim(),
         category: String(item.category || "").trim(),
         priority: normalizeStoredPriority(item.priority),
+        budget: Math.max(0, Number(item.budget) || 0),
         createdAt: String(item.createdAt || ""),
       }))
       .filter((item) => item.id && item.authorId && item.title && item.content);
@@ -90,6 +92,7 @@ export function createCommunityPost(
     content: String(input.content || "").trim().slice(0, 1200),
     category: String(input.category || "").trim().slice(0, 80),
     priority: normalizeStoredPriority(input.priority),
+    budget: Math.max(0, Number(input.budget) || 0),
   };
 
   const nextPosts = [post, ...getCommunityPosts()];

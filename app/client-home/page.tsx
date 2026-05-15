@@ -9,6 +9,7 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
+  CircleDollarSign,
   CirclePlus,
   Clock,
   FilePenLine,
@@ -24,6 +25,7 @@ import {
   MessageSquareQuote,
   ShieldAlert,
   Send,
+  Sparkles,
   Star,
   Upload,
   UserCircle,
@@ -33,11 +35,14 @@ import {
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 import {
   fetchApprovedCommunityPosts,
+  formatPhpBudget,
   normalizePriority,
   POST_APPROVED_MESSAGE,
   POST_REVIEW_MESSAGE,
+  suggestTaskBudget,
   urgencyBadgeClass,
   URGENCY_OPTIONS,
+  type BudgetSuggestion,
 } from "../lib/communityPosts";
 import { isCommunityPostWithinLast24Hours, type CommunityPostPriority } from "../lib/postsStorage";
 import { connectSocket, disconnectSocket, subscribePostApproved } from "../lib/socket";
@@ -54,6 +59,7 @@ type PostItem = {
   content: string;
   category: string;
   priority: CommunityPostPriority;
+  budget: number;
   avatar: string;
 };
 
@@ -161,6 +167,10 @@ function ClientHomePageContent() {
   const [postSubmitting, setPostSubmitting] = useState(false);
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
+  const [postBudgetInput, setPostBudgetInput] = useState("");
+  const [rateSuggestion, setRateSuggestion] = useState<BudgetSuggestion | null>(null);
+  const [rateSuggestLoading, setRateSuggestLoading] = useState(false);
+  const [rateSuggestMessage, setRateSuggestMessage] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
   const [notifications, setNotifications] = useState<string[]>([]);
   const [postToast, setPostToast] = useState<ClientPostToastState>(null);
@@ -204,6 +214,7 @@ function ClientHomePageContent() {
       content: string;
       category: string;
       priority: CommunityPostPriority;
+      budget?: number;
       authorAvatarDataUrl?: string;
     },
     fallbackAvatar: string,
@@ -217,6 +228,7 @@ function ClientHomePageContent() {
     content: post.content,
     category: post.category || "General",
     priority: post.priority,
+    budget: typeof post.budget === "number" ? post.budget : 0,
     avatar: post.authorAvatarDataUrl || fallbackAvatar,
   });
 
@@ -291,6 +303,7 @@ function ClientHomePageContent() {
             content: payload.post.content,
             category: payload.post.category,
             priority: normalizePriority(payload.post.priority),
+            budget: payload.post.budget,
             authorAvatarDataUrl: payload.post.authorAvatarDataUrl,
           },
           fallbackAvatar,
@@ -461,13 +474,52 @@ function ClientHomePageContent() {
     }
   };
 
+  const handleSuggestRate = () => {
+    const category = postCategoryInput.trim();
+    const title = postTitleInput.trim();
+    const content = postDescriptionInput.trim();
+    if (!category || !title || !content) {
+      setRateSuggestMessage("Fill in category, title, and description first.");
+      return;
+    }
+    if (rateSuggestLoading) return;
+    void (async () => {
+      setRateSuggestLoading(true);
+      setRateSuggestMessage("");
+      try {
+        const suggestion = await suggestTaskBudget({
+          title,
+          description: content,
+          subjectCategory: category,
+          urgency: postPriorityInput.toLowerCase(),
+        });
+        setRateSuggestion(suggestion);
+        setRateSuggestMessage("");
+        if (!postBudgetInput.trim()) {
+          setPostBudgetInput(String(suggestion.suggestedBudget));
+        }
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Could not get a rate suggestion.";
+        setRateSuggestMessage(message);
+      } finally {
+        setRateSuggestLoading(false);
+      }
+    })();
+  };
+
   const handleCreatePost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const category = postCategoryInput.trim();
     const title = postTitleInput.trim();
     const content = postDescriptionInput.trim();
+    const budgetRaw = postBudgetInput.trim();
+    const budget = Number(budgetRaw.replace(/,/g, ""));
     if (!category || !title || !content || !meUserId) {
       setPostStatusMessage("Please complete category, title, and description.");
+      return;
+    }
+    if (!budgetRaw || !Number.isFinite(budget) || budget < 50) {
+      setPostStatusMessage("Enter a valid budget of at least ₱50.");
       return;
     }
     if (postSubmitting) return;
@@ -480,11 +532,15 @@ function ClientHomePageContent() {
           description: content,
           subjectCategory: category,
           urgency: postPriorityInput.toLowerCase(),
+          budget: Math.round(budget),
         });
         setPostCategoryInput("");
         setPostPriorityInput("Normal");
         setPostTitleInput("");
         setPostDescriptionInput("");
+        setPostBudgetInput("");
+        setRateSuggestion(null);
+        setRateSuggestMessage("");
         setPostToast({ variant: "pending", message: POST_REVIEW_MESSAGE });
         setNotifications((prev) =>
           [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
@@ -682,6 +738,62 @@ function ClientHomePageContent() {
                         <p className="mt-1.5 text-[11px] text-zinc-500">Detailed descriptions get better responses</p>
                       </div>
 
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label
+                            htmlFor="post-budget"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                          >
+                            <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                              <CircleDollarSign className="h-3.5 w-3.5" strokeWidth={2} />
+                            </span>
+                            Budget (PHP)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleSuggestRate}
+                            disabled={rateSuggestLoading}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#FFD4C2] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#C2410C] transition hover:bg-[#FFF2EB] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+                            {rateSuggestLoading ? "Consulting AI…" : "Suggest fair rate"}
+                          </button>
+                        </div>
+                        <div className="relative mt-1.5">
+                          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-zinc-500">
+                            ₱
+                          </span>
+                          <input
+                            id="post-budget"
+                            type="number"
+                            min={50}
+                            step={50}
+                            value={postBudgetInput}
+                            onChange={(event) => setPostBudgetInput(event.target.value)}
+                            placeholder="e.g. 800"
+                            className="h-11 w-full rounded-xl border border-zinc-300 bg-white py-2 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-zinc-500">
+                          How much you are willing to pay a peer for this help (Philippine Peso).
+                        </p>
+                        {rateSuggestion ? (
+                          <div className="mt-2 rounded-xl border border-[#FFD4C2] bg-[#FFF8F4] px-3 py-2.5 text-[11px] leading-5 text-zinc-700">
+                            <p className="font-semibold text-zinc-900">
+                              Suggested range: {formatPhpBudget(rateSuggestion.minBudget)} –{" "}
+                              {formatPhpBudget(rateSuggestion.maxBudget)}
+                              <span className="ml-1 font-normal text-zinc-500">
+                                (typical: {formatPhpBudget(rateSuggestion.suggestedBudget)})
+                              </span>
+                            </p>
+                            <p className="mt-1 text-zinc-600">{rateSuggestion.rationale}</p>
+                          </div>
+                        ) : null}
+                        {rateSuggestMessage ? (
+                          <p className="mt-1.5 text-[11px] text-[#C2410C]">{rateSuggestMessage}</p>
+                        ) : null}
+                      </div>
+
                       <div className="flex items-center gap-2 pt-2">
                         <button
                           type="submit"
@@ -698,6 +810,9 @@ function ClientHomePageContent() {
                             setPostPriorityInput("Normal");
                             setPostTitleInput("");
                             setPostDescriptionInput("");
+                            setPostBudgetInput("");
+                            setRateSuggestion(null);
+                            setRateSuggestMessage("");
                             setPostStatusMessage("");
                             setPostToast(null);
                           }}
@@ -723,7 +838,7 @@ function ClientHomePageContent() {
                       <ul className="mt-3 space-y-1.5 text-xs leading-5 text-zinc-600">
                         <li>- Be specific about what you need</li>
                         <li>- Set realistic deadlines</li>
-                        <li>- Offer fair rates</li>
+                        <li>- Use AI to find a fair PHP rate, then set your budget</li>
                         <li>- Provide context for your request</li>
                       </ul>
                     </aside>
@@ -1055,6 +1170,11 @@ function ClientHomePageContent() {
                           >
                             {post.priority}
                           </span>
+                          {post.budget > 0 ? (
+                            <span className="rounded-full bg-[#FFF2EB] px-4 py-1 text-xs font-semibold text-[#C2410C]">
+                              {formatPhpBudget(post.budget)}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <p className="mt-4 text-2xl font-semibold leading-tight text-zinc-900">{post.title}</p>

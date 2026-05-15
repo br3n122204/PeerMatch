@@ -23,6 +23,7 @@ function mapTaskToFeedPost(task, client) {
     content: task.description || '',
     category: task.subjectCategory || 'General',
     priority: urgencyLabel(task.urgency),
+    budget: typeof task.budget === 'number' ? task.budget : 0,
     status: task.status,
     createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : new Date().toISOString(),
   };

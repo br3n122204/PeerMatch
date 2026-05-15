@@ -244,6 +244,7 @@ export type PostApprovedPayload = {
     category: string;
     priority: string;
     createdAt: string;
+    budget?: number;
   };
 };
 

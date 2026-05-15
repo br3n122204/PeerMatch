@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchApprovedCommunityPosts, urgencyBadgeClass } from "@/app/lib/communityPosts";
+import { fetchApprovedCommunityPosts, formatPhpBudget, urgencyBadgeClass } from "@/app/lib/communityPosts";
 import type { CommunityPost } from "@/app/lib/postsStorage";
 
 export default function FreelancerBrowsePage() {
@@ -67,6 +67,11 @@ export default function FreelancerBrowsePage() {
                 <span className={`rounded-full px-4 py-1 text-xs font-semibold ${urgencyBadgeClass(post.priority)}`}>
                   {post.priority}
                 </span>
+                {post.budget > 0 ? (
+                  <span className="rounded-full bg-[#FFF2EB] px-4 py-1 text-xs font-semibold text-[#C2410C]">
+                    {formatPhpBudget(post.budget)}
+                  </span>
+                ) : null}
               </div>
             </div>
             <p className="mt-4 text-xl font-semibold leading-tight text-zinc-900">{post.title}</p>

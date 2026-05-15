@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Clock, Users } from "lucide-react";
 import { DashboardStatCard } from "@/app/components/freelancer/DashboardStatCard";
 import { useFreelancerDashboardUser } from "./FreelancerDashboardShell";
-import { fetchApprovedCommunityPosts, urgencyBadgeClass } from "@/app/lib/communityPosts";
+import { fetchApprovedCommunityPosts, formatPhpBudget, urgencyBadgeClass } from "@/app/lib/communityPosts";
 import type { CommunityPost } from "@/app/lib/postsStorage";
 import {
   resolveFreelancerGreetingDisplayName,
@@ -114,6 +114,11 @@ export default function FreelancerDashboardPage() {
                   <span className={`rounded-full px-4 py-1 text-xs font-semibold ${urgencyBadgeClass(post.priority)}`}>
                     {post.priority}
                   </span>
+                  {post.budget > 0 ? (
+                    <span className="rounded-full bg-[#FFF2EB] px-4 py-1 text-xs font-semibold text-[#C2410C]">
+                      {formatPhpBudget(post.budget)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <p className="mt-4 text-2xl font-semibold leading-tight text-zinc-900">{post.title}</p>
