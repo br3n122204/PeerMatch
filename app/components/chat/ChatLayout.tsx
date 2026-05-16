@@ -346,7 +346,8 @@ export function ChatLayout({
     return unsub;
   }, [allowUnsend, currentUserId]);
   const filteredConversations = useMemo(() => {
-    return conversations;
+    // Filter out conversations without actual messages (no timestamp means no messages)
+    return conversations.filter((c) => c.lastTimestamp !== null);
   }, [conversations]);
 
   const activeUserConnected = useMemo(() => {
@@ -390,7 +391,8 @@ export function ChatLayout({
     setActiveUserId(u.id);
     setActiveUserName(u.name);
     userNameByIdRef.current[u.id] = u.name;
-    setSearchText(u.name);
+    setSearchText("");
+    setUserResults([]);
     setSearchFocused(false);
     setDropdownOpen(false);
   };
@@ -404,6 +406,8 @@ export function ChatLayout({
     );
     setDropdownOpen(false);
     setSearchFocused(false);
+    setSearchText("");
+    setUserResults([]);
   };
 
   const handleNewChat = () => {
@@ -485,7 +489,6 @@ export function ChatLayout({
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-zinc-900">{u.name}</span>
-                            <span className="block truncate text-[11px] text-zinc-500">{u.id}</span>
                           </span>
                         </button>
                       </li>
@@ -542,7 +545,7 @@ export function ChatLayout({
                             </button>
                           </div>
                         </div>
-                        {c.lastMessagePreview ? (
+                        {c.lastMessagePreview && c.lastTimestamp ? (
                           <p
                             className={`mt-1 truncate text-xs ${
                               c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"

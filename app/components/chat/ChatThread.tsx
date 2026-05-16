@@ -611,9 +611,8 @@ export function ChatThread({
   const title = useMemo(() => {
     if (!trimmedOther) return "Select a conversation";
     if (otherUserLabel?.trim()) return otherUserLabel.trim();
-    if (resolvedOtherId) return `User ${resolvedOtherId.slice(0, 8)}…`;
     return "Conversation";
-  }, [otherUserLabel, resolvedOtherId, trimmedOther]);
+  }, [otherUserLabel, trimmedOther]);
 
   if (!currentUserId) {
     return (
