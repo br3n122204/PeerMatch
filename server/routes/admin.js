@@ -261,4 +261,34 @@ router.patch('/tasks/:id', async (req, res) => {
   }
 });
 
+router.patch('/users/:id/role', async (req, res) => {
+  try {
+    const { role } = req.body || {};
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role.' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid user id.' });
+    }
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: { role } }, { new: true })
+      .select('-password')
+      .lean();
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.json({
+      user: {
+        id: String(user._id),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update user role.' });
+  }
+});
+
 module.exports = router;
