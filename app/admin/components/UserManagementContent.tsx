@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { apiGetJson, ApiError } from "@/app/lib/api";
+import { apiGetJson, apiPatchJson, ApiError } from "@/app/lib/api";
 import { formatJoinedDate } from "../lib/formatTime";
 import type { AdminUserRow } from "../types";
 import { useAdminLayoutStats } from "./AdminLayout";
@@ -73,6 +73,20 @@ function IconBan() {
   );
 }
 
+function IconCrown() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconStar() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="#FA642C" aria-hidden>
@@ -114,6 +128,7 @@ export default function UserManagementContent() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -146,6 +161,23 @@ export default function UserManagementContent() {
   }, []);
 
   const visible = useMemo(() => filterByRoute(rows, activeTab), [rows, activeTab]);
+
+  const handlePromoteToAdmin = async (userId: string) => {
+    setPromotingId(userId);
+    try {
+      await apiPatchJson<{ user: { id: string; role: string } }>(
+        `/api/admin/users/${userId}/role`,
+        { role: 'admin' }
+      );
+      setRows((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: 'Admin' } : u))
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to promote user to admin.');
+    } finally {
+      setPromotingId(null);
+    }
+  };
 
   const totalUsers = stats?.totalUsers ?? 0;
   const verifiedUsers = stats?.verifiedUsers ?? 0;
@@ -252,6 +284,17 @@ export default function UserManagementContent() {
                         <button type="button" className="admin-row-icon" aria-label={`View ${u.name}`}>
                           <IconShield />
                         </button>
+                        {u.role !== 'Admin' && (
+                          <button
+                            type="button"
+                            className="admin-row-icon"
+                            aria-label={`Promote ${u.name} to admin`}
+                            onClick={() => handlePromoteToAdmin(u.id)}
+                            disabled={promotingId === u.id}
+                          >
+                            <IconCrown />
+                          </button>
+                        )}
                         <button type="button" className="admin-row-icon admin-row-icon--muted" aria-label="Suspend user">
                           <IconBan />
                         </button>
