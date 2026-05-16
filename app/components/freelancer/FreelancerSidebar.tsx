@@ -50,7 +50,7 @@ export function FreelancerSidebar() {
       }`}
     >
       <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
-        <Image src="/logo.png" alt="PeerMatch" width={32} height={32} className="h-8 w-8 object-contain" />
+        <Image src="/peermatch-logo.png" alt="PeerMatch" width={32} height={32} className="h-8 w-8 object-contain" />
         <div className="min-w-0 leading-tight">
           <p className="text-sm font-semibold tracking-tight text-zinc-900">PeerMatch</p>
           <p className="text-[11px] text-zinc-500">Student Collaboration</p>
