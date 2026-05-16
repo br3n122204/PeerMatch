@@ -138,4 +138,58 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+/** Client updates their own post */
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid post id.' });
+    }
+
+    const user = await User.findById(req.user.userId).select('accountType role suspended').lean();
+    if (!user) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    if (user.suspended) {
+      return res.status(403).json({ message: 'Your account is suspended.' });
+    }
+    if (user.role !== 'user' || user.accountType !== 'client') {
+      return res.status(403).json({ message: 'Only client accounts can update posts.' });
+    }
+
+    const task = await Task.findOne({ _id: req.params.id, clientId: req.user.userId });
+    if (!task) {
+      return res.status(404).json({ message: 'Post not found or you do not have permission to update it.' });
+    }
+
+    const title = String(req.body?.title || '').trim().slice(0, 120);
+    const description = String(req.body?.description || req.body?.content || '').trim().slice(0, 1200);
+    const subjectCategory = String(req.body?.subjectCategory || req.body?.category || '').trim().slice(0, 80);
+    const urgency = normalizeUrgency(req.body?.urgency || req.body?.priority);
+
+    if (!title || !description || !subjectCategory) {
+      return res.status(400).json({ message: 'Category, title, and description are required.' });
+    }
+
+    task.title = title;
+    task.description = description;
+    task.subjectCategory = subjectCategory;
+    task.urgency = urgency;
+    task.flagged = urgency === 'high';
+
+    await task.save();
+
+    const populated = await Task.findById(task._id)
+      .populate('clientId', 'name email accountType photoDataUrl')
+      .lean();
+
+    res.json({
+      message: 'Post updated successfully.',
+      post: mapTaskToFeedPost(populated),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update your post. Please try again.' });
+  }
+});
+
 module.exports = router;
