@@ -7,7 +7,7 @@ import { formatRelativeTime } from "../lib/formatTime";
 import type { AdminTaskRow } from "../types";
 import { useAdminLayoutStats } from "./AdminLayout";
 
-type TaskRouteTab = "pending" | "flagged" | "approved";
+type TaskRouteTab = "pending" | "approved" | "declined";
 
 type RowStatus = "Pending" | "Approved" | "Rejected";
 
@@ -15,7 +15,6 @@ type TaskRow = {
   id: string;
   title: string;
   ago: string;
-  flagged?: boolean;
   client: string;
   budget: number;
   category: "Academic" | "Non-Academic";
@@ -50,18 +49,10 @@ function IconX() {
   );
 }
 
-function IconFlag() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
 const tabs: { id: TaskRouteTab; label: string; path: string }[] = [
   { id: "pending", label: "Pending", path: "/admin/tasks/pending" },
-  { id: "flagged", label: "Flagged", path: "/admin/tasks/flagged" },
   { id: "approved", label: "Approved", path: "/admin/tasks/approved" },
+  { id: "declined", label: "Declined", path: "/admin/tasks/declined" },
 ];
 
 function apiToRow(t: AdminTaskRow): TaskRow {
@@ -71,7 +62,6 @@ function apiToRow(t: AdminTaskRow): TaskRow {
     id: t.id,
     title: t.title,
     ago: t.createdAt ? formatRelativeTime(t.createdAt) : "—",
-    flagged: t.flagged,
     client: t.clientName,
     budget: t.budget,
     category: t.category === "academic" ? "Academic" : "Non-Academic",
@@ -81,8 +71,8 @@ function apiToRow(t: AdminTaskRow): TaskRow {
 
 function filterRows(list: TaskRow[], t: TaskRouteTab): TaskRow[] {
   if (t === "pending") return list.filter((r) => r.status === "Pending");
-  if (t === "flagged") return list.filter((r) => r.flagged && r.status === "Pending");
   if (t === "approved") return list.filter((r) => r.status === "Approved");
+  if (t === "declined") return list.filter((r) => r.status === "Rejected");
   return list;
 }
 
@@ -92,10 +82,10 @@ export default function TaskModerationContent() {
   const router = useRouter();
   const path = pathname.toLowerCase();
 
-  const tab: TaskRouteTab = path.endsWith("/tasks/flagged")
-    ? "flagged"
-    : path.endsWith("/tasks/approved")
-      ? "approved"
+  const tab: TaskRouteTab = path.endsWith("/tasks/approved")
+    ? "approved"
+    : path.endsWith("/tasks/declined")
+      ? "declined"
       : "pending";
 
   const [rows, setRows] = useState<TaskRow[]>([]);
@@ -207,11 +197,6 @@ export default function TaskModerationContent() {
                       <div className="admin-task-cell">
                         <span className="admin-task-cell__title">{r.title}</span>
                         <span className="admin-task-cell__ago">{r.ago}</span>
-                        {r.flagged ? (
-                          <span className="admin-flag-badge">
-                            <IconFlag /> Flagged for Review
-                          </span>
-                        ) : null}
                       </div>
                     </td>
                     <td>{r.client}</td>
