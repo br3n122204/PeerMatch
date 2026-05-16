@@ -124,7 +124,6 @@ export function UserSearchDropdown({
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-zinc-900">{u.name}</div>
-                        <div className="truncate text-[11px] text-zinc-500">{u.id}</div>
                       </div>
                       {active ? <span className="text-xs font-semibold text-[#FF6B35]">Selected</span> : null}
                     </button>

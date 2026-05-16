@@ -32,6 +32,17 @@ function getInitials(name: string) {
   return letters.join("") || "U";
 }
 
+function messagesBelongToPeer(me: string, other: string, msgs: ChatMessagePayload[]) {
+  if (!msgs.length) return true;
+  const pair = new Set([me, other]);
+  return msgs.every((m) => {
+    const s = String(m.senderId || "").trim();
+    const r = String(m.receiverId || "").trim();
+    if (!s || !r) return false;
+    return pair.has(s) && pair.has(r);
+  });
+}
+
 function formatTimeAgo(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -335,7 +346,8 @@ export function ChatLayout({
     return unsub;
   }, [allowUnsend, currentUserId]);
   const filteredConversations = useMemo(() => {
-    return conversations;
+    // Filter out conversations without actual messages (no timestamp means no messages)
+    return conversations.filter((c) => c.lastTimestamp !== null);
   }, [conversations]);
 
   const activeUserConnected = useMemo(() => {
@@ -379,7 +391,8 @@ export function ChatLayout({
     setActiveUserId(u.id);
     setActiveUserName(u.name);
     userNameByIdRef.current[u.id] = u.name;
-    setSearchText(u.name);
+    setSearchText("");
+    setUserResults([]);
     setSearchFocused(false);
     setDropdownOpen(false);
   };
@@ -393,6 +406,8 @@ export function ChatLayout({
     );
     setDropdownOpen(false);
     setSearchFocused(false);
+    setSearchText("");
+    setUserResults([]);
   };
 
   const handleNewChat = () => {
@@ -474,7 +489,6 @@ export function ChatLayout({
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-zinc-900">{u.name}</span>
-                            <span className="block truncate text-[11px] text-zinc-500">{u.id}</span>
                           </span>
                         </button>
                       </li>
@@ -531,13 +545,15 @@ export function ChatLayout({
                             </button>
                           </div>
                         </div>
-                        <p
-                          className={`mt-1 truncate text-xs ${
-                            c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
-                          } leading-snug`}
-                        >
-                          {c.lastMessagePreview || ""}
-                        </p>
+                        {c.lastMessagePreview && c.lastTimestamp ? (
+                          <p
+                            className={`mt-1 truncate text-xs ${
+                              c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
+                            } leading-snug`}
+                          >
+                            {c.lastMessagePreview}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -593,6 +609,7 @@ export function ChatLayout({
           onConversationUpdated={(otherId, msgs: ChatMessagePayload[]) => {
             if (!otherId) return;
             if (!msgs || msgs.length === 0) return; // IMPORTANT: do not persist empty/temporary chats
+            if (!messagesBelongToPeer(currentUserId, otherId, msgs)) return;
 
             const last = msgs[msgs.length - 1];
             if (!last) return;

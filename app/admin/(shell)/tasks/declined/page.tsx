@@ -1,5 +1,5 @@
 import TaskModerationContent from "../../../components/TaskModerationContent";
 
-export default function AdminTasksFlaggedPage() {
+export default function AdminTasksDeclinedPage() {
   return <TaskModerationContent />;
 }

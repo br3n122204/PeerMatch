@@ -1,11 +1,12 @@
 "use client";
 
 import { ChevronDown, FileText } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { apiPutJson, ApiError } from "@/app/lib/api";
+import { fetchMyCommunityPosts } from "@/app/lib/communityPosts";
 import {
-  getCommunityPostsByAuthor,
-  subscribeToCommunityPosts,
-  updateCommunityPost,
+  COMMUNITY_POSTS_CHANGED_EVENT,
+  notifyCommunityPostsChanged,
   type CommunityPost,
   type CommunityPostPriority,
 } from "@/app/lib/postsStorage";
@@ -29,11 +30,14 @@ function formatTimeAgo(value: string) {
 }
 
 function priorityBadgeClass(priority: CommunityPostPriority) {
-  return priority === "Important" ? "bg-[#FFC31E] text-zinc-900" : "bg-[#56BA54] text-zinc-900";
+  if (priority === "High") return "bg-[#FF6B35] text-white";
+  if (priority === "Low") return "bg-[#A8DADC] text-zinc-900";
+  return "bg-[#56BA54] text-zinc-900";
 }
 
 export function FeaturedPostEditor({ authorId, authorAvatar }: FeaturedPostEditorProps) {
-  const [myPosts, setMyPosts] = useState<CommunityPost[]>(() => getCommunityPostsByAuthor(authorId));
+  const [myPosts, setMyPosts] = useState<CommunityPost[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedPostId, setSelectedPostId] = useState<string>("");
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("");
@@ -42,11 +46,24 @@ export function FeaturedPostEditor({ authorId, authorAvatar }: FeaturedPostEdito
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const loadPosts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const posts = await fetchMyCommunityPosts();
+      setMyPosts(posts);
+    } catch {
+      setMyPosts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const refresh = () => setMyPosts(getCommunityPostsByAuthor(authorId));
-    refresh();
-    return subscribeToCommunityPosts(refresh);
-  }, [authorId]);
+    loadPosts();
+    const onRefresh = () => void loadPosts();
+    window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+    return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
+  }, [loadPosts]);
 
   useEffect(() => {
     if (myPosts.length === 0) {
@@ -82,7 +99,7 @@ export function FeaturedPostEditor({ authorId, authorAvatar }: FeaturedPostEdito
     );
   }, [selectedPost, editTitle, editCategory, editPriority, editDescription]);
 
-  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedPost || !authorId || saving) return;
 
@@ -96,20 +113,22 @@ export function FeaturedPostEditor({ authorId, authorAvatar }: FeaturedPostEdito
 
     setSaving(true);
     setSaveStatus("Saving...");
-    const updated = updateCommunityPost(selectedPost.id, authorId, {
-      title,
-      category,
-      content,
-      priority: editPriority,
-    });
-    setSaving(false);
-
-    if (!updated) {
-      setSaveStatus("Could not save changes. Try again.");
-      return;
+    try {
+      await apiPutJson<{ message: string; post: CommunityPost }>(`/api/tasks/${selectedPost.id}`, {
+        title,
+        description: content,
+        subjectCategory: category,
+        urgency: editPriority.toLowerCase(),
+      });
+      setSaveStatus("Changes saved.");
+      notifyCommunityPostsChanged();
+      await loadPosts();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not save changes. Try again.";
+      setSaveStatus(message);
+    } finally {
+      setSaving(false);
     }
-
-    setSaveStatus("Changes saved.");
   };
 
   const cardAvatar = authorAvatar || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
@@ -209,12 +228,13 @@ export function FeaturedPostEditor({ authorId, authorAvatar }: FeaturedPostEdito
                     id="featured-post-urgency"
                     value={editPriority}
                     onChange={(event) =>
-                      setEditPriority(event.target.value === "Important" ? "Important" : "Normal")
+                      setEditPriority(event.target.value as CommunityPostPriority)
                     }
                     className="h-10 w-full appearance-none rounded-xl border border-zinc-300 bg-white py-2 pl-3 pr-9 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30"
                   >
+                    <option value="Low">Low</option>
                     <option value="Normal">Normal</option>
-                    <option value="Important">Important</option>
+                    <option value="High">High</option>
                   </select>
                   <ChevronDown
                     aria-hidden="true"

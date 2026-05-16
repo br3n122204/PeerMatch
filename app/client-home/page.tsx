@@ -34,12 +34,12 @@ import {
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 import {
   fetchApprovedCommunityPosts,
+  fetchMyCommunityPosts,
   formatPhpBudget,
+  POST_APPROVED_MESSAGE,
   POST_REVIEW_MESSAGE,
-  suggestTaskBudget,
   urgencyBadgeClass,
   URGENCY_OPTIONS,
-  type BudgetSuggestion,
 } from "../lib/communityPosts";
 import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
 import {
@@ -49,7 +49,7 @@ import {
   notifyCommunityPostsChanged,
   type CommunityPostPriority,
 } from "../lib/postsStorage";
-import { disconnectSocket } from "../lib/socket";
+import { connectSocket, disconnectSocket, subscribePostApproved } from "../lib/socket";
 import { ChatLayout } from "../components/chat/ChatLayout";
 import { ClientPostToast, type ClientPostToastState } from "../components/ClientPostToast";
 
@@ -172,12 +172,10 @@ function ClientHomePageContent() {
   const [postTitleInput, setPostTitleInput] = useState("");
   const [postDescriptionInput, setPostDescriptionInput] = useState("");
   const [postBudgetInput, setPostBudgetInput] = useState("");
-  const [rateSuggestion, setRateSuggestion] = useState<BudgetSuggestion | null>(null);
-  const [rateSuggestLoading, setRateSuggestLoading] = useState(false);
-  const [rateSuggestMessage, setRateSuggestMessage] = useState("");
   const [postStatusMessage, setPostStatusMessage] = useState("");
   const [notifications, setNotifications] = useState<string[]>([]);
   const [postToast, setPostToast] = useState<ClientPostToastState>(null);
+  const knownApprovedPostIdsRef = useRef<Set<string>>(new Set());
 
   const activeConnections: number | null | undefined = undefined;
   const hoursThisWeek: number | null | undefined = undefined;
@@ -286,6 +284,89 @@ function ClientHomePageContent() {
     window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
     return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
   }, [loadFeedPosts]);
+
+  const dismissPostToast = useCallback(() => setPostToast(null), []);
+
+  const handlePostApproved = useCallback(
+    (message?: string) => {
+      const approvedMessage = String(message || "").trim() || POST_APPROVED_MESSAGE;
+      setPostToast({ variant: "approved", message: approvedMessage });
+      setNotifications((prev) =>
+        [approvedMessage, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE && item !== approvedMessage)].slice(
+          0,
+          5,
+        ),
+      );
+      notifyCommunityPostsChanged();
+      void loadFeedPosts();
+    },
+    [loadFeedPosts],
+  );
+
+  useEffect(() => {
+    if (!meUserId) return;
+    connectSocket(meUserId);
+    const unsub = subscribePostApproved((payload) => {
+      if (payload.post?.id) {
+        knownApprovedPostIdsRef.current.add(payload.post.id);
+      }
+      handlePostApproved(payload.message);
+    });
+    return unsub;
+  }, [meUserId, handlePostApproved]);
+
+  useEffect(() => {
+    if (!meUserId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mine = await fetchMyCommunityPosts();
+        if (cancelled) return;
+        for (const post of mine) {
+          if (post.status === "approved") {
+            knownApprovedPostIdsRef.current.add(post.id);
+          }
+        }
+      } catch {
+        // ignore — polling/socket will still work after a new post
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [meUserId]);
+
+  const awaitingPostApproval =
+    postToast?.variant === "pending" || notifications.includes(POST_REVIEW_MESSAGE);
+
+  useEffect(() => {
+    if (!meUserId || !awaitingPostApproval) return;
+
+    let cancelled = false;
+    const pollForApproval = async () => {
+      try {
+        const mine = await fetchMyCommunityPosts();
+        if (cancelled) return;
+        const newlyApproved = mine.filter(
+          (post) => post.status === "approved" && !knownApprovedPostIdsRef.current.has(post.id),
+        );
+        if (newlyApproved.length === 0) return;
+        for (const post of newlyApproved) {
+          knownApprovedPostIdsRef.current.add(post.id);
+        }
+        handlePostApproved();
+      } catch {
+        // retry on next interval
+      }
+    };
+
+    void pollForApproval();
+    const intervalId = window.setInterval(() => void pollForApproval(), 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [meUserId, awaitingPostApproval, handlePostApproved]);
 
   useEffect(() => {
     setIsPanelVisible(false);
@@ -436,38 +517,6 @@ function ClientHomePageContent() {
     }
   };
 
-  const handleSuggestRate = () => {
-    const category = postCategoryInput.trim();
-    const title = postTitleInput.trim();
-    const content = postDescriptionInput.trim();
-    if (!category || !title || !content) {
-      setRateSuggestMessage("Fill in category, title, and description first.");
-      return;
-    }
-    if (rateSuggestLoading) return;
-    void (async () => {
-      setRateSuggestLoading(true);
-      setRateSuggestMessage("");
-      try {
-        const suggestion = await suggestTaskBudget({
-          title,
-          description: content,
-          subjectCategory: category,
-          urgency: postPriorityInput.toLowerCase(),
-        });
-        setRateSuggestion(suggestion);
-        setRateSuggestMessage("");
-        if (!postBudgetInput.trim()) {
-          setPostBudgetInput(String(suggestion.suggestedBudget));
-        }
-      } catch (err) {
-        const message = err instanceof ApiError ? err.message : "Could not get a rate suggestion.";
-        setRateSuggestMessage(message);
-      } finally {
-        setRateSuggestLoading(false);
-      }
-    })();
-  };
 
   const handleCreatePost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -489,20 +538,21 @@ function ClientHomePageContent() {
       setPostSubmitting(true);
       setPostStatusMessage("");
       try {
-        await apiPostJson<{ message: string }>("/api/tasks", {
+        const created = await apiPostJson<{ message: string; post?: { id: string } }>("/api/tasks", {
           title,
           description: content,
           subjectCategory: category,
           urgency: postPriorityInput.toLowerCase(),
           budget: Math.round(budget),
         });
+        if (created.post?.id) {
+          knownApprovedPostIdsRef.current.delete(created.post.id);
+        }
         setPostCategoryInput("");
         setPostPriorityInput("Normal");
         setPostTitleInput("");
         setPostDescriptionInput("");
         setPostBudgetInput("");
-        setRateSuggestion(null);
-        setRateSuggestMessage("");
         setPostToast({ variant: "pending", message: POST_REVIEW_MESSAGE });
         setNotifications((prev) =>
           [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
@@ -541,8 +591,8 @@ function ClientHomePageContent() {
 
   return (
     <div
-      className={`bg-[#F0F7F4] px-4 sm:px-6 lg:px-8 ${
-        activePanel === "messages" ? "h-[100dvh] overflow-hidden py-4 lg:py-4" : "min-h-screen py-6 lg:py-8"
+      className={`bg-[#F0F7F4] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 ${
+        activePanel === "messages" ? "h-[100dvh] overflow-hidden py-4 lg:py-4" : "min-h-screen"
       }`}
     >
       <div
@@ -550,7 +600,7 @@ function ClientHomePageContent() {
           activePanel === "messages" ? "h-full min-h-0" : "min-h-[calc(100vh-3rem)]"
         }`}
       >
-        <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+        <aside className={`flex min-h-0 flex-col rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm ${activePanel === "messages" ? "h-full" : "sticky top-6 h-[calc(100vh-3rem)]"} lg:row-span-1`}>
           <div className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm">
             <Image src="/logo.png" alt="PeerMatch logo" width={32} height={32} className="h-8 w-8 object-contain" />
             <div>
@@ -559,7 +609,7 @@ function ClientHomePageContent() {
             </div>
           </div>
 
-          <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1.5" aria-label="Main">
+          <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1" aria-label="Main">
             {navItems.map((item) => {
               const active = isNavActive(item.href);
               return (
@@ -579,7 +629,7 @@ function ClientHomePageContent() {
           <button
             type="button"
             onClick={handleLogout}
-            className={`${navItemClass} mt-auto w-full justify-start border border-transparent pt-4`}
+            className={`${navItemClass} mt-4 w-full justify-start border border-transparent`}
           >
             <LogOut className="h-5 w-5 shrink-0" strokeWidth={1.75} />
             <span>Logout</span>
@@ -587,11 +637,11 @@ function ClientHomePageContent() {
         </aside>
 
         <main
-          className={`flex h-full min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white shadow-[0_4px_32px_rgba(15,23,42,0.04)] ${
+          className={`flex min-h-0 flex-col rounded-2xl border border-zinc-100/80 bg-white shadow-[0_4px_32px_rgba(15,23,42,0.04)] ${
             activePanel === "profile" || activePanel === "featured-post" || activePanel === "messages"
               ? "p-4"
               : "p-6 sm:p-8 lg:p-10"
-          } ${activePanel === "messages" ? "overflow-hidden" : ""}`}
+          } ${!activePanel ? "h-full" : ""}`}
         >
           <div
             className={`flex min-h-0 flex-1 flex-col transform-gpu transition-all duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none ${
@@ -703,26 +753,15 @@ function ClientHomePageContent() {
                       </div>
 
                       <div>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label
-                            htmlFor="post-budget"
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
-                          >
-                            <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
-                              <CircleDollarSign className="h-3.5 w-3.5" strokeWidth={2} />
-                            </span>
-                            Budget (PHP)
-                          </label>
-                          <button
-                            type="button"
-                            onClick={handleSuggestRate}
-                            disabled={rateSuggestLoading}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#FFD4C2] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#C2410C] transition hover:bg-[#FFF2EB] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
-                            {rateSuggestLoading ? "Consulting AI…" : "Suggest fair rate"}
-                          </button>
-                        </div>
+                        <label
+                          htmlFor="post-budget"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
+                        >
+                          <span className="inline-flex items-center justify-center rounded-md bg-[#FFF2EB] p-1 text-[#FF6B35]">
+                            <CircleDollarSign className="h-3.5 w-3.5" strokeWidth={2} />
+                          </span>
+                          Budget (PHP)
+                        </label>
                         <div className="relative mt-1.5">
                           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-zinc-500">
                             ₱
@@ -741,21 +780,6 @@ function ClientHomePageContent() {
                         <p className="mt-1.5 text-[11px] text-zinc-500">
                           How much you are willing to pay a peer for this help (Philippine Peso).
                         </p>
-                        {rateSuggestion ? (
-                          <div className="mt-2 rounded-xl border border-[#FFD4C2] bg-[#FFF8F4] px-3 py-2.5 text-[11px] leading-5 text-zinc-700">
-                            <p className="font-semibold text-zinc-900">
-                              Suggested range: {formatPhpBudget(rateSuggestion.minBudget)} –{" "}
-                              {formatPhpBudget(rateSuggestion.maxBudget)}
-                              <span className="ml-1 font-normal text-zinc-500">
-                                (typical: {formatPhpBudget(rateSuggestion.suggestedBudget)})
-                              </span>
-                            </p>
-                            <p className="mt-1 text-zinc-600">{rateSuggestion.rationale}</p>
-                          </div>
-                        ) : null}
-                        {rateSuggestMessage ? (
-                          <p className="mt-1.5 text-[11px] text-[#C2410C]">{rateSuggestMessage}</p>
-                        ) : null}
                       </div>
 
                       <div className="flex items-center gap-2 pt-2">
@@ -775,8 +799,6 @@ function ClientHomePageContent() {
                             setPostTitleInput("");
                             setPostDescriptionInput("");
                             setPostBudgetInput("");
-                            setRateSuggestion(null);
-                            setRateSuggestMessage("");
                             setPostStatusMessage("");
                             setPostToast(null);
                           }}
@@ -1131,7 +1153,7 @@ function ClientHomePageContent() {
           </div>
         </main>
 
-        <aside className="flex h-full min-h-0 flex-col gap-8 rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm">
+        <aside className={`flex min-h-0 flex-col gap-8 rounded-2xl border border-zinc-200/80 bg-[#E8EFEC] p-6 shadow-sm ${activePanel === "messages" ? "h-full overflow-hidden" : ""} lg:row-span-1`}>
           <section>
             <h3 className="text-sm font-semibold text-zinc-900">Notifications</h3>
             {notifications.length === 0 ? (
@@ -1195,7 +1217,7 @@ function ClientHomePageContent() {
           </section>
         </aside>
       </div>
-      <ClientPostToast toast={postToast} onDismiss={() => setPostToast(null)} />
+      <ClientPostToast toast={postToast} onDismiss={dismissPostToast} />
     </div>
   );
 }
