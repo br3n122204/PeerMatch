@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { apiGetJson, apiPostJson, ApiError } from "../lib/api";
 import {
-  fetchApprovedCommunityPosts,
   fetchMyCommunityPosts,
   formatPhpBudget,
   POST_APPROVED_MESSAGE,
@@ -41,10 +40,9 @@ import {
   urgencyBadgeClass,
   URGENCY_OPTIONS,
 } from "../lib/communityPosts";
+import { useCommunityPostsContext } from "../lib/CommunityPostsContext";
 import { FeaturedPostEditor } from "../components/client/FeaturedPostEditor";
 import {
-  clearCommunityPostsStorage,
-  COMMUNITY_POSTS_CHANGED_EVENT,
   isCommunityPostWithinLast24Hours,
   notifyCommunityPostsChanged,
   type CommunityPostPriority,
@@ -165,7 +163,7 @@ function ClientHomePageContent() {
   const [savedProfileSnapshot, setSavedProfileSnapshot] = useState<ProfileFormSnapshot | null>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(true);
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  const { approvedPosts, refreshAll } = useCommunityPostsContext();
   const [postCategoryInput, setPostCategoryInput] = useState("");
   const [postPriorityInput, setPostPriorityInput] = useState<CommunityPostPriority>("Normal");
   const [postSubmitting, setPostSubmitting] = useState(false);
@@ -187,11 +185,6 @@ function ClientHomePageContent() {
   const displayHours = displayHoursRaw;
 
   const postsHeading = "Community Feed";
-
-  const recentPosts = useMemo(
-    () => posts.filter((post) => isCommunityPostWithinLast24Hours(post.createdAt)),
-    [posts],
-  );
 
   const formatTimeAgo = (value: string) => {
     const ts = new Date(value).getTime();
@@ -267,23 +260,16 @@ function ClientHomePageContent() {
     };
   }, [router]);
 
-  const loadFeedPosts = useCallback(async () => {
-    const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
-    try {
-      const feed = await fetchApprovedCommunityPosts();
-      setPosts(feed.map((post) => mapPostForUi(post, fallbackAvatar)));
-      clearCommunityPostsStorage();
-    } catch {
-      setPosts([]);
-    }
-  }, [profilePhotoDataUrl]);
+  const fallbackAvatar = profilePhotoDataUrl || "https://api.dicebear.com/7.x/initials/svg?seed=Client";
+  const posts = useMemo(
+    () => approvedPosts.map((post) => mapPostForUi(post, fallbackAvatar)),
+    [approvedPosts, fallbackAvatar],
+  );
 
-  useEffect(() => {
-    void loadFeedPosts();
-    const onRefresh = () => void loadFeedPosts();
-    window.addEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
-    return () => window.removeEventListener(COMMUNITY_POSTS_CHANGED_EVENT, onRefresh);
-  }, [loadFeedPosts]);
+  const recentPosts = useMemo(
+    () => posts.filter((post) => isCommunityPostWithinLast24Hours(post.createdAt)),
+    [posts],
+  );
 
   const dismissPostToast = useCallback(() => setPostToast(null), []);
 
@@ -298,9 +284,9 @@ function ClientHomePageContent() {
         ),
       );
       notifyCommunityPostsChanged();
-      void loadFeedPosts();
+      void refreshAll();
     },
-    [loadFeedPosts],
+    [refreshAll],
   );
 
   useEffect(() => {
@@ -558,7 +544,7 @@ function ClientHomePageContent() {
           [POST_REVIEW_MESSAGE, ...prev.filter((item) => item !== POST_REVIEW_MESSAGE)].slice(0, 5),
         );
         notifyCommunityPostsChanged();
-        await loadFeedPosts();
+        await refreshAll();
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Could not save your post. Please try again.";
         setPostStatusMessage(message);
@@ -1019,6 +1005,11 @@ function ClientHomePageContent() {
                                 >
                                   {post.priority}
                                 </span>
+                                {post.budget > 0 ? (
+                                  <span className="rounded-full bg-[#FFF2EB] px-2 py-0.5 text-[10px] font-semibold text-[#C2410C]">
+                                    {formatPhpBudget(post.budget)}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                           ))}
