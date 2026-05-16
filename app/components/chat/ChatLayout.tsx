@@ -32,6 +32,17 @@ function getInitials(name: string) {
   return letters.join("") || "U";
 }
 
+function messagesBelongToPeer(me: string, other: string, msgs: ChatMessagePayload[]) {
+  if (!msgs.length) return true;
+  const pair = new Set([me, other]);
+  return msgs.every((m) => {
+    const s = String(m.senderId || "").trim();
+    const r = String(m.receiverId || "").trim();
+    if (!s || !r) return false;
+    return pair.has(s) && pair.has(r);
+  });
+}
+
 function formatTimeAgo(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -531,13 +542,15 @@ export function ChatLayout({
                             </button>
                           </div>
                         </div>
-                        <p
-                          className={`mt-1 truncate text-xs ${
-                            c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
-                          } leading-snug`}
-                        >
-                          {c.lastMessagePreview || ""}
-                        </p>
+                        {c.lastMessagePreview ? (
+                          <p
+                            className={`mt-1 truncate text-xs ${
+                              c.hasUnread ? "font-semibold text-zinc-900" : "text-zinc-600"
+                            } leading-snug`}
+                          >
+                            {c.lastMessagePreview}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -593,6 +606,7 @@ export function ChatLayout({
           onConversationUpdated={(otherId, msgs: ChatMessagePayload[]) => {
             if (!otherId) return;
             if (!msgs || msgs.length === 0) return; // IMPORTANT: do not persist empty/temporary chats
+            if (!messagesBelongToPeer(currentUserId, otherId, msgs)) return;
 
             const last = msgs[msgs.length - 1];
             if (!last) return;

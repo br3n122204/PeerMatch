@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Send, Smile, X } from "lucide-react";
 import Picker from "emoji-picker-react";
 import { ApiError, apiDeleteJson, apiGetJson, apiPostJson } from "@/app/lib/api";
@@ -123,6 +123,20 @@ export function ChatThread({
     };
   }, [otherUserId, currentUserId]);
 
+  // Clear thread + composer state synchronously when the peer changes so stale messages never
+  // render or leak into sidebar preview for a different user (fixes wrong snippet after search).
+  useLayoutEffect(() => {
+    setMessages([]);
+    setReplyingTo(null);
+    setOpenActionMenuId(null);
+    setOpenReactionId(null);
+    setShowEmojiPicker(false);
+    setForwardFrom(null);
+    setForwardNote("");
+    setDraft("");
+    setSocketError(null);
+  }, [resolvedOtherId, currentUserId]);
+
   useEffect(() => {
     if (!canChat) {
       setMessages([]);
@@ -157,8 +171,14 @@ export function ChatThread({
     if (!canChat) return;
     if (!resolvedOtherId) return;
     if (typeof onConversationUpdatedRef.current !== "function") return;
+    if (
+      messages.length > 0 &&
+      !messages.every((m) => isSameConversation(m, currentUserId, resolvedOtherId))
+    ) {
+      return;
+    }
     onConversationUpdatedRef.current(resolvedOtherId, messages);
-  }, [messages, canChat, resolvedOtherId]);
+  }, [messages, canChat, resolvedOtherId, currentUserId]);
 
   // Mark conversation messages as seen when the chat is open.
   useEffect(() => {
