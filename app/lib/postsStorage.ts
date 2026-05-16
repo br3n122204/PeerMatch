@@ -1,5 +1,7 @@
 export type CommunityPostPriority = "Low" | "Normal" | "High";
 
+export type CommunityPostStatus = "pending" | "approved" | "rejected";
+
 export type CommunityPost = {
   id: string;
   authorId: string;
@@ -13,6 +15,7 @@ export type CommunityPost = {
   priority: CommunityPostPriority;
   budget: number;
   createdAt: string;
+  status?: CommunityPostStatus;
 };
 
 export const COMMUNITY_POSTS_STORAGE_KEY = "peermatch_community_posts_v1";
