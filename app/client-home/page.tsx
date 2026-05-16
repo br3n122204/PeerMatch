@@ -792,7 +792,7 @@ function ClientHomePageContent() {
                       </div>
 
                       <div>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <label
                             htmlFor="post-budget"
                             className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
@@ -802,15 +802,6 @@ function ClientHomePageContent() {
                             </span>
                             Budget (PHP)
                           </label>
-                          <button
-                            type="button"
-                            onClick={handleSuggestRate}
-                            disabled={rateSuggestLoading}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#FFD4C2] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#C2410C] transition hover:bg-[#FFF2EB] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
-                            {rateSuggestLoading ? "Consulting AI…" : "Suggest fair rate"}
-                          </button>
                         </div>
                         <div className="relative mt-1.5">
                           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-zinc-500">
